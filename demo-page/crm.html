@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Broker Portal — Universal AI Auto Broker</title>
+  <link rel="stylesheet" href="assets/style.css?v=6">
+  <style>
+    /* ── CRM-specific ── */
+    .login-wrap { max-width: 380px; margin: 4rem auto; }
+    .login-card { background:#fff; border-radius:14px; box-shadow:0 12px 40px rgba(7,55,99,.15); padding:2.25rem; border-top:4px solid var(--ms-magenta); }
+    .login-card h2 { color:var(--ms-navy); margin-bottom:.35rem; }
+    .login-card p.sub { color:var(--ms-grey); font-size:.9rem; margin-bottom:1.4rem; }
+    .login-card label { font-size:.75rem; font-weight:700; color:var(--ms-navy); text-transform:uppercase; letter-spacing:.04em; }
+    .login-card input { width:100%; margin:.3rem 0 1rem; padding:.6rem .7rem; border:1.5px solid #d8dee6; border-radius:8px; font-size:.95rem; }
+    .login-card input:focus { outline:none; border-color:var(--ms-magenta); }
+    .login-card .btn { width:100%; text-align:center; }
+    .demo-hint { font-size:.75rem; color:var(--ms-grey); margin-top:.9rem; text-align:center; }
+
+    .crm-head { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem; margin:1.5rem 0 1rem; }
+    .crm-head h1 { color:var(--ms-navy); font-size:1.5rem; }
+    .crm-head h1 span { color:var(--ms-magenta); }
+    .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:1rem; margin-bottom:1.5rem; }
+    .stat { background:#fff; border-radius:12px; box-shadow:0 4px 18px rgba(7,55,99,.08); padding:1.1rem 1.3rem; }
+    .stat .n { font-size:1.9rem; font-weight:800; color:var(--ms-navy); }
+    .stat .l { font-size:.8rem; color:var(--ms-grey); text-transform:uppercase; letter-spacing:.04em; font-weight:600; }
+    .stat.accent .n { color:var(--ms-magenta); }
+
+    .lead-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:1.1rem; }
+    .lead { background:#fff; border-radius:12px; box-shadow:0 4px 18px rgba(7,55,99,.08); overflow:hidden; display:flex; flex-direction:column; }
+    .lead-top { display:flex; gap:.9rem; padding:1rem 1.1rem .6rem; }
+    .lead-thumb { width:74px; height:56px; border-radius:8px; object-fit:cover; flex:none; background:#eef2f7; }
+    .lead-who { flex:1; min-width:0; }
+    .lead-who h3 { color:var(--ms-navy); font-size:1rem; margin-bottom:.1rem; }
+    .lead-who .phone { font-size:.85rem; color:var(--ms-charcoal); }
+    .lead-who .brand { font-size:.72rem; color:var(--ms-grey); }
+    .pill { font-size:.68rem; font-weight:700; padding:.2rem .6rem; border-radius:999px; text-transform:uppercase; letter-spacing:.03em; align-self:flex-start; }
+    .pill.new { background:#fdeaf2; color:var(--ms-magenta); }
+    .pill.contacted { background:#e6f0fa; color:var(--ms-navy); }
+    .pill.bidding { background:#fff4e0; color:#9a6b00; }
+    .lead-body { padding:.4rem 1.1rem 1rem; font-size:.9rem; }
+    .lead-body .veh { color:var(--ms-navy); font-weight:600; }
+    .lead-body .crit { color:var(--ms-grey); }
+    .lead-meta { display:flex; justify-content:space-between; align-items:center; padding:.7rem 1.1rem; border-top:1px solid #eef2f7; font-size:.78rem; color:var(--ms-grey); }
+    .lead-meta button { font-size:.75rem; border:1.5px solid var(--ms-navy); color:var(--ms-navy); background:transparent; border-radius:7px; padding:.28rem .6rem; cursor:pointer; font-weight:600; }
+    .lead-meta button:hover { background:var(--ms-navy); color:#fff; }
+    .empty { text-align:center; color:var(--ms-grey); padding:3rem; }
+  </style>
+</head>
+<body>
+  <nav>
+    <a class="logo" href="index.html">AUTO<span>BROKER</span>.AI</a>
+    <a class="link" href="index.html">Home</a>
+    <a class="link" href="inventory.html">Inventory</a>
+    <a class="link" href="calculator.html">Cost Calculator</a>
+    <a class="link active" href="crm.html">Broker Portal</a>
+  </nav>
+
+  <!-- LOGIN GATE -->
+  <div id="login" class="login-wrap">
+    <div class="login-card">
+      <h2>Broker Portal</h2>
+      <p class="sub">Sign in to view and manage incoming customer leads.</p>
+      <label for="email">Work email</label>
+      <input type="email" id="email" placeholder="broker@caucasusauto.ge" value="broker@caucasusauto.ge">
+      <label for="pw">Password</label>
+      <input type="password" id="pw" placeholder="••••••••" value="demo">
+      <button class="btn" id="signin" type="button">Sign in</button>
+      <p class="demo-hint">Demo portal — any credentials work.</p>
+    </div>
+  </div>
+
+  <!-- DASHBOARD -->
+  <main id="dash" style="display:none">
+    <div class="crm-head">
+      <h1>Incoming <span>Leads</span></h1>
+      <button class="btn secondary" id="signout" type="button">Sign out</button>
+    </div>
+    <div class="stats" id="stats"></div>
+    <div class="lead-grid" id="leads"></div>
+  </main>
+
+  <footer>
+    Broker Portal — demo. In production these leads arrive from the AI assistant's
+    <code>create_lead</code> tool into your CRM; a broker works them here.
+  </footer>
+
+  <script>
+    // ── Seed leads (realistic; represent what the AI assistant captures) ──
+    const SEED = [
+      {name:'Giorgi Beridze', phone:'+995 555 12 34 56', brand:'Caucasus Auto Import', status:'new',
+       vehicle:'2017 Audi Q7 Prestige', lot:'1-52738836', budget:14000,
+       image:'https://images.bid.cars/152738836_6a4ca452478df/2017-Audi-Q7-WA1VAAF77HD023125-1.jpg', ago:'8 min ago'},
+      {name:'Nino Kapanadze', phone:'+995 599 88 77 21', brand:'Caucasus Auto Import', status:'new',
+       criteria:'Black Toyota, 2020–2026, hybrid, clean title, up to $18k', budget:18000, ago:'26 min ago'},
+      {name:'Levan Tsiklauri', phone:'+995 577 45 09 88', brand:'Lion Auto', status:'contacted',
+       vehicle:'2023 Dodge Charger SXT', lot:'1-58398796', budget:16000,
+       image:'https://images.bid.cars/158398796_6a4ca450b1fa4/2023-Dodge-Charger-2C3CDXKG0PH536896-1.jpg', ago:'1 hr ago'},
+      {name:'Mariam Gelashvili', phone:'+995 558 30 12 44', brand:'Caucasus Auto Import', status:'bidding',
+       vehicle:'2019 Ford Mustang EcoBoost', lot:'1-57513396', budget:15000,
+       image:'https://images.bid.cars/157513396_6a4ca44be3317/2019-Ford-Mustang-1FA6P8TH5K5117882-1.jpg', ago:'2 hr ago'},
+      {name:'Davit Meladze', phone:'+995 591 77 65 43', brand:'Lion Auto', status:'contacted',
+       criteria:'BMW X5 or X3, 2018+, AWD, under $22k', budget:22000, ago:'3 hr ago'},
+      {name:'Salome Chkheidze', phone:'+995 595 10 20 30', brand:'Caucasus Auto Import', status:'new',
+       vehicle:'2017 Mercedes-Benz GLS 450', lot:'1-47862806', budget:20000,
+       image:'https://images.bid.cars/147862806_6a4ca450a3670/2017-Mercedes-Benz-GLS-Class-4JGDF6EE4HA810255-1.jpg', ago:'5 hr ago'},
+    ];
+
+    const LS_LEADS = 'broker_leads_v1', LS_AUTH = 'broker_auth_v1';
+
+    function allLeads() {
+      let extra = [];
+      try { extra = JSON.parse(localStorage.getItem(LS_LEADS) || '[]'); } catch (e) {}
+      return [...extra, ...SEED];
+    }
+    function statusFor(l){ return l.status || 'new'; }
+
+    function render() {
+      const leads = allLeads();
+      const nNew = leads.filter(l => statusFor(l)==='new').length;
+      const nBid = leads.filter(l => statusFor(l)==='bidding').length;
+      document.getElementById('stats').innerHTML = `
+        <div class="stat accent"><div class="n">${leads.length}</div><div class="l">Total leads</div></div>
+        <div class="stat"><div class="n">${nNew}</div><div class="l">New / uncontacted</div></div>
+        <div class="stat"><div class="n">${nBid}</div><div class="l">Ready to bid</div></div>
+        <div class="stat"><div class="n">15 min</div><div class="l">Avg. response SLA</div></div>`;
+
+      const grid = document.getElementById('leads');
+      if (!leads.length) { grid.innerHTML = '<p class="empty">No leads yet.</p>'; return; }
+      grid.innerHTML = leads.map((l, i) => {
+        const st = statusFor(l);
+        const thumb = l.image
+          ? `<img class="lead-thumb" src="${l.image}" alt="" onerror="this.style.visibility='hidden'">`
+          : `<div class="lead-thumb"></div>`;
+        const interest = l.vehicle
+          ? `<div class="veh">🚗 ${l.vehicle}${l.lot ? ` · Lot ${l.lot}` : ''}</div>`
+          : `<div class="crit">🔎 ${l.criteria || 'General enquiry'}</div>`;
+        return `<div class="lead">
+          <div class="lead-top">
+            ${thumb}
+            <div class="lead-who">
+              <h3>${l.name || 'Unnamed lead'}</h3>
+              <div class="phone">📞 ${l.phone || '—'}</div>
+              <div class="brand">${l.brand || ''}</div>
+            </div>
+            <span class="pill ${st}">${st}</span>
+          </div>
+          <div class="lead-body">
+            ${interest}
+            ${l.budget ? `<div class="crit">Budget: $${Number(l.budget).toLocaleString()}</div>` : ''}
+          </div>
+          <div class="lead-meta">
+            <span>${l.ago || 'just now'}</span>
+            <button data-i="${i}" ${st!=='new'?'disabled style="opacity:.4;cursor:default"':''}>Mark contacted</button>
+          </div>
+        </div>`;
+      }).join('');
+
+      grid.querySelectorAll('button[data-i]').forEach(b => b.addEventListener('click', () => {
+        const leads2 = allLeads(); const lead = leads2[+b.dataset.i];
+        // persist a status flip for demo (store the whole current list)
+        lead.status = 'contacted';
+        localStorage.setItem(LS_LEADS, JSON.stringify(leads2));
+        render();
+      }));
+    }
+
+    function showDash(v) {
+      document.getElementById('login').style.display = v ? 'none' : '';
+      document.getElementById('dash').style.display = v ? '' : 'none';
+      if (v) render();
+    }
+    document.getElementById('signin').addEventListener('click', () => {
+      localStorage.setItem(LS_AUTH, '1'); showDash(true);
+    });
+    document.getElementById('signout').addEventListener('click', () => {
+      localStorage.removeItem(LS_AUTH); showDash(false);
+    });
+    showDash(localStorage.getItem(LS_AUTH) === '1');
+  </script>
+</body>
+</html>

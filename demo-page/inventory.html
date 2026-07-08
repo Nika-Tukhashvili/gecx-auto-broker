@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Live Inventory — Universal AI Auto Broker</title>
+  <link rel="stylesheet" href="assets/style.css?v=6">
+  <script defer src="https://www.gstatic.com/chat-messenger/sdk/prod/v1.16/chat-messenger.js"></script>
+  <link rel="stylesheet" href="https://www.gstatic.com/chat-messenger/sdk/prod/v1.16/themes/chat-messenger-default.css">
+  <link rel="stylesheet" href="https://www.gstatic.com/chat-messenger/sdk/prod/v1.16/themes/chat-messenger-layout.css">
+</head>
+<body>
+  <nav>
+    <a class="logo" href="index.html">AUTO<span>BROKER</span>.AI</a>
+    <a class="link" href="index.html">Home</a>
+    <a class="link active" href="inventory.html">Inventory</a>
+    <a class="link" href="calculator.html">Cost Calculator</a>
+  </nav>
+
+  <header class="page-head">
+    <h1>Auction <span class="accent">Inventory</span></h1>
+    <p>Real lots from live US auction feeds (Copart &amp; IAAI). Filter by your criteria, or click
+       “Ask AI” on any car to get a full to-the-door cost estimate from the assistant.</p>
+  </header>
+
+  <main>
+    <div class="filters">
+      <div>
+        <label for="f-make">Make</label>
+        <select id="f-make"><option value="">All makes</option></select>
+      </div>
+      <div>
+        <label for="f-body">Body style</label>
+        <select id="f-body"><option value="">All styles</option></select>
+      </div>
+      <div>
+        <label for="f-damage">Damage</label>
+        <select id="f-damage"><option value="">Any damage</option></select>
+      </div>
+      <div>
+        <label for="f-year">Min year</label>
+        <select id="f-year"><option value="">Any year</option></select>
+      </div>
+      <div>
+        <label for="f-budget">Max bid budget ($)</label>
+        <input type="number" id="f-budget" placeholder="e.g. 15000" step="500">
+      </div>
+      <div>
+        <label for="f-search">Keyword</label>
+        <input type="text" id="f-search" placeholder="e.g. mustang">
+      </div>
+      <button class="btn secondary" id="f-reset" type="button">Reset</button>
+    </div>
+
+    <p class="count-note" id="count-note">Loading inventory…</p>
+    <div class="lot-grid" id="lot-grid"></div>
+    <div style="text-align:center; margin-top:2rem">
+      <button class="btn" id="load-more" type="button" style="display:none">Load more</button>
+    </div>
+  </main>
+
+  <!-- Lead-capture modal: writes a lead the Broker Portal (crm.html) displays -->
+  <div id="lead-modal" style="display:none;position:fixed;inset:0;background:rgba(7,55,99,.45);z-index:1000;align-items:center;justify-content:center">
+    <div style="background:#fff;border-radius:14px;max-width:400px;width:90%;padding:1.75rem;box-shadow:0 20px 60px rgba(7,55,99,.3);border-top:4px solid var(--ms-magenta)">
+      <h2 style="color:var(--ms-navy);margin-bottom:.25rem;font-size:1.15rem">Request a broker callback</h2>
+      <p id="lm-veh" style="color:var(--ms-grey);font-size:.9rem;margin-bottom:1.1rem"></p>
+      <label style="font-size:.75rem;font-weight:700;color:var(--ms-navy);text-transform:uppercase">Full name</label>
+      <input id="lm-name" placeholder="Your name" style="width:100%;margin:.3rem 0 1rem;padding:.55rem .7rem;border:1.5px solid #d8dee6;border-radius:8px">
+      <label style="font-size:.75rem;font-weight:700;color:var(--ms-navy);text-transform:uppercase">Phone</label>
+      <input id="lm-phone" placeholder="+995 5xx xx xx xx" style="width:100%;margin:.3rem 0 1.2rem;padding:.55rem .7rem;border:1.5px solid #d8dee6;border-radius:8px">
+      <div style="display:flex;gap:.6rem">
+        <button class="btn" id="lm-send" style="flex:1">Send to broker</button>
+        <button class="btn secondary" id="lm-cancel" type="button">Cancel</button>
+      </div>
+    </div>
+  </div>
+  <div id="toast" style="display:none;position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--ms-navy);color:#fff;padding:.8rem 1.3rem;border-radius:10px;z-index:1001;font-size:.9rem;box-shadow:0 8px 24px rgba(0,0,0,.25)"></div>
+
+  <footer>
+    Lot data: rebrowser/copart-dataset (real auction lots, deduplicated).
+    Estimated bids are synthetic demo values — premium price fields are redacted in the free tier.
+  </footer>
+
+  <script>
+    const PALETTE = ['#073763', '#0a4a85', '#f0076f', '#4a5568', '#2b6cb0', '#6b3fa0'];
+    const PAGE_SIZE = 60;
+    let LOTS = [];
+    let filtered = [];
+    let shown = 0;
+
+    function fmt(n) { return n == null ? '—' : Number(n).toLocaleString(); }
+
+    function applyFilters() {
+      const make = document.getElementById('f-make').value;
+      const body = document.getElementById('f-body').value;
+      const damage = document.getElementById('f-damage').value;
+      const minYear = document.getElementById('f-year').value;
+      const budget = parseFloat(document.getElementById('f-budget').value);
+      const kw = document.getElementById('f-search').value.trim().toLowerCase();
+
+      filtered = LOTS.filter(l =>
+        (!make || l.make === make) &&
+        (!body || l.bodyStyle === body) &&
+        (!damage || l.damage === damage) &&
+        (!minYear || parseInt(l.year) >= parseInt(minYear)) &&
+        (!budget || l.estimatedBid <= budget) &&
+        (!kw || (`${l.year} ${l.make} ${l.model} ${l.trim}`.toLowerCase().includes(kw)))
+      );
+      shown = 0;
+      document.getElementById('lot-grid').innerHTML = '';
+      renderMore();
+    }
+
+    function renderMore() {
+      const grid = document.getElementById('lot-grid');
+      const slice = filtered.slice(shown, shown + PAGE_SIZE);
+      slice.forEach((l, idx) => {
+        const i = shown + idx;
+        const card = document.createElement('div');
+        card.className = 'lot-card';
+        const initials = (l.make[0] || '') + (l.model[0] || '');
+        const grad = `linear-gradient(135deg, ${PALETTE[i % PALETTE.length]}, ${PALETTE[(i + 2) % PALETTE.length]})`;
+        // Real photo if the lot has one (from a live scrape); otherwise a branded tile.
+        const photo = l.image
+          ? `<div class="lot-photo" style="background:${grad}"><img src="${l.image}" loading="lazy" alt="${l.year} ${l.make} ${l.model}"
+                onload="this.parentNode.style.background='#eef2f7'"
+                onerror="this.remove()"></div>`
+          : `<div class="lot-photo" style="background:${grad}">${initials}</div>`;
+        card.innerHTML = `
+          ${photo}
+          <div class="lot-body">
+            <h3>${l.year} ${l.make} ${l.model}${l.trim ? ' ' + l.trim : ''}</h3>
+            <div class="lot-meta">Lot #${l.lotId || l.vin || '—'}${l.location ? ' · ' + l.location : ''}${l.saleDate ? ' · Sale ' + l.saleDate : ''}</div>
+            <div class="lot-tags">
+              ${l.damage ? `<span class="tag damage">${l.damage}</span>` : ''}
+              ${l.secondaryDamage ? `<span class="tag damage">${l.secondaryDamage}</span>` : ''}
+              ${l.mileage != null ? `<span class="tag">${fmt(l.mileage)} mi</span>` : ''}
+              ${l.color ? `<span class="tag">${l.color}</span>` : ''}
+              ${l.hasKeys === 'YES' ? '<span class="tag">🔑 Keys</span>' : (l.hasKeys === 'NO' ? '<span class="tag">No keys</span>' : '')}
+              ${l.fuelType ? `<span class="tag">${l.fuelType}</span>` : ''}
+            </div>
+            <div class="lot-price-row">
+              <div class="lot-price">$${fmt(l.estimatedBid)}<small>est. winning bid*</small></div>
+              <div style="display:flex;gap:.4rem">
+                <button class="ask-ai" data-i="${i}">💬 Ask AI</button>
+                <button class="ask-ai req-lead" data-i="${i}" style="border-color:var(--ms-navy);color:var(--ms-navy)">📇 Request</button>
+              </div>
+            </div>
+          </div>`;
+        grid.appendChild(card);
+      });
+      shown += slice.length;
+
+      grid.querySelectorAll('.ask-ai:not(.req-lead):not([data-bound])').forEach(btn => {
+        btn.setAttribute('data-bound', '1');
+        btn.addEventListener('click', () => window.askAiAboutLot(filtered[btn.dataset.i]));
+      });
+      grid.querySelectorAll('.req-lead:not([data-bound])').forEach(btn => {
+        btn.setAttribute('data-bound', '1');
+        btn.addEventListener('click', () => openLeadModal(filtered[btn.dataset.i]));
+      });
+
+      document.getElementById('count-note').textContent =
+        `Showing ${shown.toLocaleString()} of ${filtered.length.toLocaleString()} matching lots (${LOTS.length.toLocaleString()} total in inventory)`;
+      document.getElementById('load-more').style.display = shown < filtered.length ? 'inline-block' : 'none';
+    }
+
+    function fillSelect(id, values, numericDesc) {
+      const sel = document.getElementById(id);
+      let uniq = [...new Set(values)].filter(Boolean);
+      uniq.sort(numericDesc ? (a, b) => b - a : undefined);
+      uniq.forEach(v => {
+        const o = document.createElement('option');
+        o.value = v; o.textContent = v;
+        sel.appendChild(o);
+      });
+    }
+
+    // Prefer a live bid.cars scrape (real photos) if present, else the Copart dataset.
+    // The ?t= cache-buster guarantees a fresh copy after you drop in a new file.
+    const bust = '?t=' + Date.now();
+    fetch('bidcars_inventory.json' + bust).then(r => r.ok ? r.json() : Promise.reject())
+      .catch(() => fetch('inventory.json' + bust).then(r => r.json()))
+      .then(data => {
+        LOTS = data.lots;
+        fillSelect('f-make', LOTS.map(l => l.make));
+        fillSelect('f-body', LOTS.map(l => l.bodyStyle));
+        fillSelect('f-damage', LOTS.map(l => l.damage));
+        fillSelect('f-year', LOTS.map(l => l.year), true);
+        ['f-make', 'f-body', 'f-damage', 'f-year'].forEach(id =>
+          document.getElementById(id).addEventListener('change', applyFilters));
+        document.getElementById('f-budget').addEventListener('input', applyFilters);
+        document.getElementById('f-search').addEventListener('input', applyFilters);
+        document.getElementById('f-reset').addEventListener('click', () => {
+          ['f-make', 'f-body', 'f-damage', 'f-year'].forEach(id => document.getElementById(id).value = '');
+          document.getElementById('f-budget').value = '';
+          document.getElementById('f-search').value = '';
+          applyFilters();
+        });
+        document.getElementById('load-more').addEventListener('click', renderMore);
+        applyFilters();
+      })
+      .catch(() => {
+        document.getElementById('count-note').textContent =
+          'Could not load inventory — serve this folder over HTTP (e.g. python3 -m http.server 8787 --directory demo-page).';
+      });
+    // ── Lead capture → Broker Portal (localStorage, read by crm.html) ──
+    let leadCtx = null;
+    window.openLeadModal = function (lot) {
+      leadCtx = lot;
+      document.getElementById('lm-veh').textContent =
+        `${lot.year} ${lot.make} ${lot.model}${lot.trim ? ' ' + lot.trim : ''} · Lot ${lot.lotId || lot.vin || '—'}`;
+      document.getElementById('lm-name').value = '';
+      document.getElementById('lm-phone').value = '';
+      document.getElementById('lead-modal').style.display = 'flex';
+    };
+    function closeLead() { document.getElementById('lead-modal').style.display = 'none'; }
+    function toast(msg) {
+      const t = document.getElementById('toast'); t.textContent = msg; t.style.display = 'block';
+      setTimeout(() => { t.style.display = 'none'; }, 3200);
+    }
+    document.getElementById('lm-cancel').addEventListener('click', closeLead);
+    document.getElementById('lm-send').addEventListener('click', () => {
+      const name = document.getElementById('lm-name').value.trim();
+      const phone = document.getElementById('lm-phone').value.trim();
+      if (!name || !phone) { toast('Please enter your name and phone.'); return; }
+      const l = leadCtx || {};
+      const lead = {
+        name, phone, brand: 'Caucasus Auto Import', status: 'new',
+        vehicle: `${l.year} ${l.make} ${l.model}${l.trim ? ' ' + l.trim : ''}`.trim(),
+        lot: l.lotId || l.vin || '', image: l.image || '',
+        budget: l.estimatedBid || null, ago: 'just now',
+      };
+      let arr = []; try { arr = JSON.parse(localStorage.getItem('broker_leads_v1') || '[]'); } catch (e) {}
+      arr.unshift(lead);
+      localStorage.setItem('broker_leads_v1', JSON.stringify(arr));
+      closeLead();
+      toast('✅ Sent! A broker will call you. See it in the Broker Portal.');
+    });
+  </script>
+  <script src="assets/widget.js"></script>
+  <script>
+    window.addEventListener("chat-messenger-loaded", () => {
+      chatSdk.registerContext(chatSdk.prebuilts.ces.createContext({
+        deploymentName: "projects/377455548251/locations/us/apps/5ead3420-1e1c-431d-b9d6-0e934e810f4a/deployments/web-widget-demo",
+        tokenBroker: { enableTokenBroker: true, enableRecaptcha: false }
+      }));
+    });
+  </script>
+  <chat-messenger url-allowlist="*" render-mode="slide-in">
+    <chat-messenger-chat-bubble chat-title="Auto Import Assistant"></chat-messenger-chat-bubble>
+    <chat-messenger-container chat-title="Auto Import Assistant" chat-title-icon="https://gstatic.com/dialogflow-console/common/assets/ccai-favicons/conversational_agents.png" enable-file-upload enable-audio-input>
+      <chat-reset-session-button slot="titlebar-actions" title-text="Start new chat"></chat-reset-session-button>
+      <chat-toggle-dialog-button slot="titlebar-actions" title-text-expanded="Collapse" title-text-collapsed="Expand"></chat-toggle-dialog-button>
+    </chat-messenger-container>
+  </chat-messenger>
+</body>
+</html>

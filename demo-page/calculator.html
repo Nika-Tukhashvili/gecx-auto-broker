@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Landed Cost Calculator — Universal AI Auto Broker</title>
+  <link rel="stylesheet" href="assets/style.css?v=6">
+  <script defer src="https://www.gstatic.com/chat-messenger/sdk/prod/v1.16/chat-messenger.js"></script>
+  <link rel="stylesheet" href="https://www.gstatic.com/chat-messenger/sdk/prod/v1.16/themes/chat-messenger-default.css">
+  <link rel="stylesheet" href="https://www.gstatic.com/chat-messenger/sdk/prod/v1.16/themes/chat-messenger-layout.css">
+</head>
+<body>
+  <nav>
+    <a class="logo" href="index.html">AUTO<span>BROKER</span>.AI</a>
+    <a class="link" href="index.html">Home</a>
+    <a class="link" href="inventory.html">Inventory</a>
+    <a class="link active" href="calculator.html">Cost Calculator</a>
+  </nav>
+
+  <header class="page-head">
+    <h1>To-the-Door <span class="accent">Cost Calculator</span></h1>
+    <p>Estimate the full landed cost of a US auction vehicle delivered to Poti port, Georgia —
+       auction fees, ocean freight, service fee and customs clearance in one transparent breakdown.</p>
+  </header>
+
+  <main>
+    <div class="calc-wrap">
+      <div class="panel">
+        <h2>Vehicle &amp; Purchase Details</h2>
+        <div class="field">
+          <label for="c-bid">Expected winning bid (USD)</label>
+          <input type="number" id="c-bid" value="12000" step="100">
+        </div>
+        <div class="field">
+          <label for="c-engine">Engine size (cm³)</label>
+          <input type="number" id="c-engine" value="2500" step="100">
+        </div>
+        <div class="field">
+          <label for="c-age">Vehicle age (years)</label>
+          <select id="c-age">
+            <option value="1">1 year</option>
+            <option value="2">2 years</option>
+            <option value="3" selected>3 years</option>
+            <option value="4">4 years</option>
+            <option value="5">5 years</option>
+            <option value="6">6 years</option>
+            <option value="8">7–9 years</option>
+            <option value="10">10+ years</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="c-fuel">Fuel type</label>
+          <select id="c-fuel">
+            <option value="gas" selected>Gasoline / Diesel</option>
+            <option value="hybrid">Hybrid (reduced excise)</option>
+            <option value="ev">Electric (excise exempt)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="c-yard">Auction yard region (US)</label>
+          <select id="c-yard">
+            <option value="900">East Coast (NJ, GA, FL) — $900 inland</option>
+            <option value="1300" selected>Central (TX, IL, TN) — $1,300 inland</option>
+            <option value="1800">West Coast (CA, WA) — $1,800 inland</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="c-service">Broker service fee (USD)</label>
+          <input type="number" id="c-service" value="500" step="50">
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Estimated Landed Cost — Poti, Georgia</h2>
+        <ul class="breakdown">
+          <li><span>Winning bid</span><span id="r-bid">—</span></li>
+          <li><span>Auction fees (gate, documentation, internet bid)</span><span id="r-fees">—</span></li>
+          <li><span>Inland US towing to port</span><span id="r-inland">—</span></li>
+          <li><span>Ocean freight → Poti</span><span id="r-ocean">—</span></li>
+          <li><span>Broker service fee</span><span id="r-service">—</span></li>
+          <li><span>Georgian customs &amp; excise (estimate)</span><span id="r-customs">—</span></li>
+          <li class="total"><span>Total to-the-door</span><span id="r-total">—</span></li>
+        </ul>
+        <div class="disclaimer">
+          ⚠️ All figures are <strong>demo estimates</strong> based on typical market rates.
+          Auction fee schedules, freight rates and Georgian excise formulas change frequently —
+          the production agent pulls live rates via its <code>calculate_total_landing_costs</code> tool,
+          and a certified human broker confirms the final quote before any bid is placed.
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    Universal AI Auto Broker Platform — white-label demo. Calculator logic mirrors the agent's
+    logistics_cost_calculator sub-agent.
+  </footer>
+
+  <script>
+    // Demo approximation of the agent's calculate_total_landing_costs tool.
+    // Georgian excise: per-cm³ rate scaled by vehicle age (older = higher rate),
+    // hybrids ~60% reduction, EVs exempt. Rates are indicative demo values.
+    const EXCISE_RATE_BY_AGE = { 1: 1.5, 2: 1.5, 3: 1.4, 4: 1.2, 5: 1.0, 6: 1.0, 8: 1.3, 10: 1.6 }; // GEL per cm³
+    const GEL_PER_USD = 2.7;
+    const OCEAN_FREIGHT = 1450; // typical container share US → Poti
+
+    function fmt(n) { return '$' + Math.round(n).toLocaleString(); }
+
+    function calc() {
+      const bid = parseFloat(document.getElementById('c-bid').value) || 0;
+      const cc = parseFloat(document.getElementById('c-engine').value) || 0;
+      const age = document.getElementById('c-age').value;
+      const fuel = document.getElementById('c-fuel').value;
+      const inland = parseFloat(document.getElementById('c-yard').value) || 0;
+      const service = parseFloat(document.getElementById('c-service').value) || 0;
+
+      // Copart-style buyer fee approximation: tiered % + fixed fees
+      const auctionFees = bid > 0 ? Math.min(0.1 * bid, 900) + 130 + 95 : 0;
+
+      let exciseGel = cc * (EXCISE_RATE_BY_AGE[age] || 1.2);
+      if (fuel === 'hybrid') exciseGel *= 0.4;
+      if (fuel === 'ev') exciseGel = 0;
+      const customsUsd = exciseGel / GEL_PER_USD + 150; // + clearance/broker docs
+
+      const total = bid + auctionFees + inland + OCEAN_FREIGHT + service + customsUsd;
+
+      document.getElementById('r-bid').textContent = fmt(bid);
+      document.getElementById('r-fees').textContent = fmt(auctionFees);
+      document.getElementById('r-inland').textContent = fmt(inland);
+      document.getElementById('r-ocean').textContent = fmt(OCEAN_FREIGHT);
+      document.getElementById('r-service').textContent = fmt(service);
+      document.getElementById('r-customs').textContent = fmt(customsUsd);
+      document.getElementById('r-total').textContent = fmt(total);
+    }
+
+    document.querySelectorAll('input, select').forEach(el => el.addEventListener('input', calc));
+    calc();
+  </script>
+  <script src="assets/widget.js"></script>
+  <script>
+    window.addEventListener("chat-messenger-loaded", () => {
+      chatSdk.registerContext(chatSdk.prebuilts.ces.createContext({
+        deploymentName: "projects/377455548251/locations/us/apps/5ead3420-1e1c-431d-b9d6-0e934e810f4a/deployments/web-widget-demo",
+        tokenBroker: { enableTokenBroker: true, enableRecaptcha: false }
+      }));
+    });
+  </script>
+  <chat-messenger url-allowlist="*" render-mode="slide-in">
+    <chat-messenger-chat-bubble chat-title="Auto Import Assistant"></chat-messenger-chat-bubble>
+    <chat-messenger-container chat-title="Auto Import Assistant" chat-title-icon="https://gstatic.com/dialogflow-console/common/assets/ccai-favicons/conversational_agents.png" enable-file-upload enable-audio-input>
+      <chat-reset-session-button slot="titlebar-actions" title-text="Start new chat"></chat-reset-session-button>
+      <chat-toggle-dialog-button slot="titlebar-actions" title-text-expanded="Collapse" title-text-collapsed="Expand"></chat-toggle-dialog-button>
+    </chat-messenger-container>
+  </chat-messenger>
+</body>
+</html>

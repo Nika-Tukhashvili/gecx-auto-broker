@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Universal AI Auto Broker — Demo</title>
+  <link rel="stylesheet" href="assets/style.css?v=6">
+  <!-- CES chat widget (console Integrate snippet) -->
+  <script defer src="https://www.gstatic.com/chat-messenger/sdk/prod/v1.16/chat-messenger.js"></script>
+  <link rel="stylesheet" href="https://www.gstatic.com/chat-messenger/sdk/prod/v1.16/themes/chat-messenger-default.css">
+  <link rel="stylesheet" href="https://www.gstatic.com/chat-messenger/sdk/prod/v1.16/themes/chat-messenger-layout.css">
+</head>
+<body>
+  <nav>
+    <a class="logo" href="index.html">AUTO<span>BROKER</span>.AI</a>
+    <a class="link active" href="index.html">Home</a>
+    <a class="link" href="inventory.html">Inventory</a>
+    <a class="link" href="calculator.html">Cost Calculator</a>
+  </nav>
+
+  <header class="hero">
+    <span class="badge">Powered by Making Science</span>
+    <h1>Import Your Dream Car <span class="accent">from US Auctions</span></h1>
+    <p>Search Copart &amp; IAAI inventory, get transparent to-the-door cost estimates
+       to Poti port, and connect with a certified broker — all through our AI assistant.</p>
+  </header>
+
+  <main class="overlap">
+    <div class="cards">
+      <div class="card">
+        <h3>🔍 Smart Inventory Search</h3>
+        <p>Tell the assistant your make, model, budget and damage tolerance — it scans live auction feeds for matching lots.</p>
+        <p style="margin-top:0.8rem"><a class="btn secondary" href="inventory.html">Browse inventory</a></p>
+      </div>
+      <div class="card">
+        <h3>💰 Total Landing Cost</h3>
+        <p>Itemized breakdown: winning bid, ocean freight, service fee and Georgian customs clearance. No surprises.</p>
+        <p style="margin-top:0.8rem"><a class="btn secondary" href="calculator.html">Try the calculator</a></p>
+      </div>
+      <div class="card">
+        <h3>🤝 Human Broker Handoff</h3>
+        <p>When you're ready to bid, a certified broker calls you within 15 minutes. The AI never bids on your behalf.</p>
+      </div>
+    </div>
+
+    <div class="cta">
+      <h2>Try the AI Assistant</h2>
+      <p>Click the chat bubble in the bottom-right corner and ask:<br>
+         <em>“I want a black 2022 Ford Mustang with a $15,000 budget.”</em></p>
+    </div>
+  </main>
+
+  <footer>
+    Universal AI Auto Broker Platform — white-label demo. Brand identity is injected per tenant via session parameters.
+  </footer>
+
+  <script>
+    window.addEventListener("chat-messenger-loaded", () => {
+      chatSdk.registerContext(
+        chatSdk.prebuilts.ces.createContext({
+          deploymentName: "projects/377455548251/locations/us/apps/5ead3420-1e1c-431d-b9d6-0e934e810f4a/deployments/web-widget-demo",
+          tokenBroker: { enableTokenBroker: true, enableRecaptcha: false }
+        }),
+      );
+    });
+  </script>
+  <chat-messenger url-allowlist="*" render-mode="slide-in">
+    <chat-messenger-chat-bubble chat-title="Auto Import Assistant"></chat-messenger-chat-bubble>
+    <chat-messenger-container
+      chat-title="Auto Import Assistant"
+      chat-title-icon="https://gstatic.com/dialogflow-console/common/assets/ccai-favicons/conversational_agents.png"
+      enable-file-upload
+      enable-audio-input
+    >
+      <chat-reset-session-button slot="titlebar-actions" title-text="Start new chat"></chat-reset-session-button>
+      <chat-toggle-dialog-button slot="titlebar-actions" title-text-expanded="Collapse" title-text-collapsed="Expand"></chat-toggle-dialog-button>
+    </chat-messenger-container>
+  </chat-messenger>
+</body>
+</html>
