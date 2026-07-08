@@ -45,12 +45,17 @@ function bridgeToast(msg) {
     return acc;
   }
 
+  function isHuman(s) {
+    // reject internal metadata: resource paths, ids, urls, json blobs
+    if (!s || s.length > 120) return false;
+    if (/[\/{}]|projects\/|locations\/|sessions\/|dfMessenger|reasoningEngines|https?:|audioEncoding|deployment/i.test(s)) return false;
+    return /[a-zA-Z]/.test(s) || /\d{5,}/.test(s);
+  }
   function onUser(e) {
     try {
-      const strs = collectStrings(e && e.detail, 0, []);
+      const strs = collectStrings(e && e.detail, 0, []).filter(isHuman);
       // the user's typed query is usually the longest human-ish string
-      const cand = strs.filter(s => s.length < 200 && /[a-zA-Z]/.test(s) && !s.includes('{') && !s.startsWith('http'))
-                       .sort((a, b) => b.length - a.length)[0];
+      const cand = strs.sort((a, b) => b.length - a.length)[0];
       if (cand) { recentUser.push(cand.trim()); if (recentUser.length > 15) recentUser.shift(); }
     } catch (err) {}
   }
@@ -64,10 +69,22 @@ function bridgeToast(msg) {
       try { arr = JSON.parse(localStorage.getItem(KEY) || '[]'); } catch (x) {}
       if (arr.some(l => l.ref === ref)) return;
       const veh = (text.match(/for (?:the|your)\s+((?:19|20)\d{2}\s+[A-Za-z][\w .\-]+?)[.\n,]/) || [])[1];
-      const phone = [...recentUser].reverse().find(m => (m.replace(/\D/g, '').length >= 7));
-      const name = [...recentUser].reverse().find(m =>
-        /^[A-Za-z][A-Za-z .'-]{2,40}$/.test(m.trim()) &&
-        !/^(yes|no|ok|okay|show|more|hi|hello|thanks|calculate|find|search|buy)/i.test(m.trim()));
+      // phone: first clean phone-like digit run across recent user messages
+      let phone = null;
+      for (const m of [...recentUser].reverse()) {
+        const hit = m.match(/\+?\d[\d\s().\-]{5,}\d/);
+        if (hit && hit[0].replace(/\D/g, '').length >= 7) { phone = hit[0].trim(); break; }
+      }
+      // name: a recent message that, with digits/punct stripped, reads like a person's name
+      let name = null;
+      for (const m of [...recentUser].reverse()) {
+        const stripped = m.replace(/[\d+().\-]/g, '').replace(/[.,]/g, ' ').replace(/\s+/g, ' ').trim();
+        const words = stripped.split(' ').filter(Boolean);
+        if (words.length >= 1 && words.length <= 3 && /^[A-Za-z][A-Za-z '\-]{1,}$/.test(stripped) &&
+            !/^(yes|no|ok|okay|show|more|hi|hello|thanks|calculate|find|search|buy|under|toyota|porsche|corolla|hybrid|black|white|red)/i.test(stripped)) {
+          name = stripped; break;
+        }
+      }
       arr.unshift({
         name: name || 'Chat lead', phone: phone || '—', brand: 'Caucasus Auto Import',
         status: 'new', vehicle: veh || '', criteria: veh ? '' : 'Captured via AI assistant',
