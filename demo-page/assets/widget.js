@@ -26,6 +26,117 @@ function bridgeToast(msg) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
+// Chat media enrichment. The agent's replies deliberately contain NO URLs
+// (the voice engine reads URLs aloud character-by-character) — only lot
+// numbers like "Lot #0-45210399". This module watches the chat's (open)
+// shadow DOM and, under any message that mentions a lot number, injects the
+// car's photo strip + a "View on bid.cars" button built from our own data
+// (lot_media.json: lotId → [imageId, tag]). Visuals without spoken URLs,
+// and links that can never be hallucinated.
+// ─────────────────────────────────────────────────────────────────────────
+(function chatMediaEnrichment() {
+  const LOT_RE = /\b(\d-\d{6,9})\b/g;
+  let map = null, loading = null;
+
+  function loadMap() {
+    if (!loading) {
+      loading = fetch('lot_media.json').then(r => (r.ok ? r.json() : {}))
+        .then(m => { map = m; return m; }).catch(() => { map = {}; return map; });
+    }
+    return loading;
+  }
+  window.__lotMedia = { get: id => (map ? map[id] : null), load: loadMap };
+  window.lotMediaUrls = function (id) {
+    const e = map && map[id];
+    if (!e) return null;
+    const base = 'https://images.bid.cars/' + e[0] + '/' + e[1];
+    return {
+      images: [1, 2, 3].map(i => base + '-' + i + '.jpg'),
+      link: 'https://bid.cars/en/lot/' + id + '/' + e[1],
+      tag: e[1],
+    };
+  };
+
+  function buildStrip(id) {
+    const u = window.lotMediaUrls(id);
+    if (!u) return null;
+    const wrap = document.createElement('div');
+    wrap.className = 'lot-media-strip';
+    wrap.style.cssText = 'margin:.45rem 0 .6rem;max-width:100%';
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;gap:6px;overflow-x:auto;margin-bottom:.4rem';
+    u.images.forEach(src => {
+      const img = document.createElement('img');
+      img.src = src; img.loading = 'lazy'; img.alt = 'photo';
+      img.style.cssText = 'height:88px;border-radius:8px;flex:none;object-fit:cover';
+      img.onerror = () => img.remove();
+      row.appendChild(img);
+    });
+    const a = document.createElement('a');
+    a.href = u.link; a.target = '_blank'; a.rel = 'noopener';
+    a.textContent = '🔗 View all photos & live bid on bid.cars';
+    a.style.cssText = 'display:inline-block;font:600 12px sans-serif;color:#073763;border:1.5px solid #073763;border-radius:7px;padding:4px 10px;text-decoration:none';
+    wrap.appendChild(row); wrap.appendChild(a);
+    return wrap;
+  }
+
+  // Recursively walk light + shadow DOM, find the DEEPEST element containing
+  // each lot id, and append the media strip right after its content.
+  function scan(root, seenRoots) {
+    if (!root || seenRoots.has(root)) return;
+    seenRoots.add(root);
+    const els = root.querySelectorAll ? root.querySelectorAll('*') : [];
+    for (const el of els) {
+      if (el.shadowRoot) scan(el.shadowRoot, seenRoots);
+      if (el.tagName === 'SCRIPT' || el.tagName === 'STYLE' || el.tagName === 'TEXTAREA') continue;
+      const text = el.textContent || '';
+      if (text.length > 4000) continue;         // skip huge containers
+      const ids = [...new Set([...text.matchAll(LOT_RE)].map(m => m[1]))];
+      for (const id of ids) {
+        // deepest node: no child element also contains this id
+        let deepest = true;
+        for (const c of el.children) {
+          if ((c.textContent || '').includes(id)) { deepest = false; break; }
+        }
+        if (!deepest) continue;
+        // one strip per lot id per element (an element may mention several lots)
+        if (el.querySelector && el.querySelector('.lot-media-strip[data-lot="' + id + '"]')) continue;
+        if (!map || !map[id]) continue;
+        const strip = buildStrip(id);
+        if (strip) { strip.dataset.lot = id; el.appendChild(strip); }
+      }
+    }
+  }
+
+  let scanTimer = null;
+  function scheduleScan() {
+    clearTimeout(scanTimer);
+    scanTimer = setTimeout(() => {
+      const cm = document.querySelector('chat-messenger');
+      if (!cm) return;
+      const txt = (cm.shadowRoot && cm.shadowRoot.textContent) || '';
+      if (!LOT_RE.test(txt)) { LOT_RE.lastIndex = 0; return; }
+      LOT_RE.lastIndex = 0;
+      loadMap().then(() => scan(cm.shadowRoot || cm, new Set()));
+    }, 600);
+  }
+
+  // Observe once the widget exists; re-scan (debounced) on every chat mutation.
+  let obsTries = 0;
+  const obsIv = setInterval(() => {
+    const cm = document.querySelector('chat-messenger');
+    if (cm && cm.shadowRoot) {
+      new MutationObserver(scheduleScan).observe(cm.shadowRoot, { childList: true, subtree: true, characterData: true });
+      clearInterval(obsIv);
+      scheduleScan();
+    }
+    if (++obsTries > 60) clearInterval(obsIv);
+  }, 500);
+  // Also nudge on the widget's own response events (covers shadow re-renders).
+  window.addEventListener('chat-messenger-response-received', scheduleScan);
+})();
+
+// ─────────────────────────────────────────────────────────────────────────
 // Chat → Broker Portal bridge (demo). The CES agent runs in Google's cloud
 // and cannot reach this browser, so we listen to the widget's client-side
 // events, capture what the user typed, and when the agent confirms a lead
@@ -56,6 +167,8 @@ function bridgeToast(msg) {
   }
 
   // Track the current car from any text (user paste or agent reply). Later text wins.
+  // Agent replies carry no URLs (voice would read them aloud) — just lot numbers —
+  // so image/link are derived from the lot id via the shared lot_media map.
   function trackCar(text) {
     if (!text) return;
     const img = text.match(/https?:\/\/images\.bid\.cars\/[^\s"'()<>]+?\.(?:jpe?g|png|webp)/i);
@@ -67,14 +180,24 @@ function bridgeToast(msg) {
     const bare = text.match(/\b(\d-\d{6,9})\b/);
     if (fromLink) car.lot = fromLink[1];
     else if (bare) car.lot = bare[1];
+    if (car.lot && window.lotMediaUrls) {
+      if (window.__lotMedia) window.__lotMedia.load();
+      const u = window.lotMediaUrls(car.lot);
+      if (u) {
+        if (!img) car.image = u.images[0];
+        if (!link) car.link = u.link;
+        if (!car.vehicle) {
+          // tag is "YEAR-Make-Model[-Trim…][-VIN]"; drop a trailing VIN-ish token
+          const parts = u.tag.split('-').filter(p => !/^[A-HJ-NPR-Z0-9]{11,}$/i.test(p));
+          car.vehicle = parts.join(' ');
+        }
+      }
+    }
     // vehicle "YEAR Make Model" (e.g. from the "I'm interested in lot …: 2026 Toyota Corolla" paste
     // or the agent's "**2026 Toyota Corolla LE**" heading)
     const veh = text.match(/\b((?:19|20)\d{2}\s+[A-Z][A-Za-z.\-]+(?:\s+[A-Za-z0-9.\-]+){1,3})/);
     if (veh) car.vehicle = veh[1].replace(/[*_]/g, '').trim();
   }
-  // If we have a lot + a bid.cars link but no photo, derive the first thumbnail:
-  // the link tail IS the image "tag" (year-make-model-vin); we just lack the id hash,
-  // so we can only set image when the agent actually included an images.bid.cars URL.
 
   function onUser(e) {
     try {
