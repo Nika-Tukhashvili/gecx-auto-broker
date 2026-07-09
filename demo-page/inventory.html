@@ -8,6 +8,12 @@
   <script defer src="https://www.gstatic.com/chat-messenger/sdk/prod/v1.16/chat-messenger.js"></script>
   <link rel="stylesheet" href="https://www.gstatic.com/chat-messenger/sdk/prod/v1.16/themes/chat-messenger-default.css">
   <link rel="stylesheet" href="https://www.gstatic.com/chat-messenger/sdk/prod/v1.16/themes/chat-messenger-layout.css">
+  <style>
+    /* Clickable photo + title → the car's bid.cars listing */
+    .lot-photo-link { display:block; cursor:pointer; }
+    .lot-card h3 a { color:inherit; text-decoration:none; }
+    .lot-card h3 a:hover { color:var(--ms-magenta); text-decoration:underline; }
+  </style>
 </head>
 <body>
   <nav>
@@ -90,6 +96,13 @@
 
     function fmt(n) { return n == null ? '—' : Number(n).toLocaleString(); }
 
+    // Build the real bid.cars listing URL for a lot (same tag scheme the chat uses).
+    function lotUrl(l) {
+      const tag = [l.year, l.make, l.model, l.vin].filter(Boolean).join('-').replace(/\s+/g, '-');
+      if (!l.lotId || !tag) return '';
+      return 'https://bid.cars/en/lot/' + l.lotId + '/' + tag;
+    }
+
     function applyFilters() {
       const make = document.getElementById('f-make').value;
       const body = document.getElementById('f-body').value;
@@ -121,15 +134,20 @@
         const initials = (l.make[0] || '') + (l.model[0] || '');
         const grad = `linear-gradient(135deg, ${PALETTE[i % PALETTE.length]}, ${PALETTE[(i + 2) % PALETTE.length]})`;
         // Real photo if the lot has one (from a live scrape); otherwise a branded tile.
+        const url = lotUrl(l);
         const photo = l.image
           ? `<div class="lot-photo" style="background:${grad}"><img src="${l.image}" loading="lazy" alt="${l.year} ${l.make} ${l.model}"
                 onload="this.parentNode.style.background='#eef2f7'"
                 onerror="this.remove()"></div>`
           : `<div class="lot-photo" style="background:${grad}">${initials}</div>`;
+        const photoBlock = url
+          ? `<a class="lot-photo-link" href="${url}" target="_blank" rel="noopener" title="View this lot on bid.cars">${photo}</a>`
+          : photo;
+        const title = `${l.year} ${l.make} ${l.model}${l.trim ? ' ' + l.trim : ''}`;
         card.innerHTML = `
-          ${photo}
+          ${photoBlock}
           <div class="lot-body">
-            <h3>${l.year} ${l.make} ${l.model}${l.trim ? ' ' + l.trim : ''}</h3>
+            <h3>${url ? `<a href="${url}" target="_blank" rel="noopener">${title}</a>` : title}</h3>
             <div class="lot-meta">Lot #${l.lotId || l.vin || '—'}${l.location ? ' · ' + l.location : ''}${l.saleDate ? ' · Sale ' + l.saleDate : ''}</div>
             <div class="lot-tags">
               ${l.damage ? `<span class="tag damage">${l.damage}</span>` : ''}
