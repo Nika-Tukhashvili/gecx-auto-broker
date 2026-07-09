@@ -99,63 +99,86 @@ function bridgeToast(msg) {
     return wrap;
   }
 
-  // Recursively walk light + shadow DOM, find the DEEPEST element containing
-  // each lot id, and append the media strip right after its content.
-  function scan(root, seenRoots) {
-    if (!root || seenRoots.has(root)) return;
-    seenRoots.add(root);
-    const els = root.querySelectorAll ? root.querySelectorAll('*') : [];
-    for (const el of els) {
-      if (el.shadowRoot) scan(el.shadowRoot, seenRoots);
-      if (el.tagName === 'SCRIPT' || el.tagName === 'STYLE' || el.tagName === 'TEXTAREA') continue;
-      const text = el.textContent || '';
-      if (text.length > 4000) continue;         // skip huge containers
-      const raws = [...text.matchAll(LOT_RE)].map(m => m[1])
-        .concat([...text.matchAll(LOT_BARE_RE)].map(m => m[1]));
-      const pairs = {};                          // resolved id -> raw string as it appears in text
-      for (const raw of raws) { const id = resolve(raw); if (id && !(id in pairs)) pairs[id] = raw; }
-      for (const id of Object.keys(pairs)) {
-        // deepest node: no child element also contains this lot (as written in the text)
-        const raw = pairs[id];
-        let deepest = true;
-        for (const c of el.children) {
-          if ((c.textContent || '').includes(raw)) { deepest = false; break; }
-        }
-        if (!deepest) continue;
-        // one strip per lot id per element (an element may mention several lots)
-        if (el.querySelector && el.querySelector('.lot-media-strip[data-lot="' + id + '"]')) continue;
-        const strip = buildStrip(id);
-        if (strip) { strip.dataset.lot = id; el.appendChild(strip); }
+  // The chat renders inside NESTED shadow roots (chat-messenger-container is
+  // slotted light-DOM whose messages live in its own shadow tree). Neither
+  // MutationObserver{subtree} nor textContent pierce shadow boundaries, so we
+  // recursively walk elements + their shadowRoots, attach an observer to every
+  // shadow root we discover, and enrich the DEEPEST element naming each lot.
+  const observedRoots = new WeakSet();
+  const observer = new MutationObserver(scheduleScan);
+
+  function walk(node, visit, seen) {
+    if (!node || seen.has(node)) return;
+    seen.add(node);
+    if (node.shadowRoot && !seen.has(node.shadowRoot)) {
+      seen.add(node.shadowRoot);
+      if (!observedRoots.has(node.shadowRoot)) {
+        observedRoots.add(node.shadowRoot);
+        observer.observe(node.shadowRoot, { childList: true, subtree: true, characterData: true });
       }
+      node.shadowRoot.querySelectorAll('*').forEach(el => walk(el, visit, seen));
     }
+    if (node.querySelectorAll) node.querySelectorAll('*').forEach(el => walk(el, visit, seen));
+    if (node.nodeType === 1) visit(node);
+  }
+
+  function enrichEl(el) {
+    if (el.tagName === 'SCRIPT' || el.tagName === 'STYLE' || el.tagName === 'TEXTAREA') return;
+    if (el.closest && el.closest('.lot-media-strip')) return;
+    const text = el.textContent || '';
+    if (!text || text.length > 4000) return;    // skip empty / huge containers
+    const raws = [...text.matchAll(LOT_RE)].map(m => m[1])
+      .concat([...text.matchAll(LOT_BARE_RE)].map(m => m[1]));
+    if (!raws.length) return;
+    const pairs = {};                            // resolved id -> raw string as written
+    for (const raw of raws) { const id = resolve(raw); if (id && !(id in pairs)) pairs[id] = raw; }
+    for (const id of Object.keys(pairs)) {
+      const raw = pairs[id];
+      let deepest = true;                        // no child element also contains it
+      for (const c of el.children) {
+        if (!c.classList.contains('lot-media-strip') && (c.textContent || '').includes(raw)) { deepest = false; break; }
+      }
+      if (!deepest) continue;
+      if (el.querySelector('.lot-media-strip[data-lot="' + id + '"]')) continue;
+      const strip = buildStrip(id);
+      if (strip) { strip.dataset.lot = id; el.appendChild(strip); }
+    }
+  }
+
+  function runScan() {
+    const cm = document.querySelector('chat-messenger');
+    if (!cm) return;
+    // First pass: any lot mentions anywhere in the (deep) chat DOM?
+    let found = false;
+    walk(cm, el => {
+      if (found) return;
+      const t = el.textContent || '';
+      if (t.length <= 4000 && (/\b\d-\d{6,9}\b/.test(t) || /Lot\s*#?\s*\d{7,9}\b/i.test(t))) found = true;
+    }, new Set());
+    if (!found) return;
+    loadMap().then(() => walk(cm, enrichEl, new Set()));
   }
 
   let scanTimer = null;
   function scheduleScan() {
     clearTimeout(scanTimer);
-    scanTimer = setTimeout(() => {
-      const cm = document.querySelector('chat-messenger');
-      if (!cm) return;
-      const txt = (cm.shadowRoot && cm.shadowRoot.textContent) || '';
-      const hasLot = /\b\d-\d{6,9}\b/.test(txt) || /Lot\s*#?\s*\d{7,9}\b/i.test(txt);
-      if (!hasLot) return;
-      loadMap().then(() => scan(cm.shadowRoot || cm, new Set()));
-    }, 600);
+    scanTimer = setTimeout(runScan, 500);
   }
 
-  // Observe once the widget exists; re-scan (debounced) on every chat mutation.
+  // Kick scans on widget events (messages stream in — retry a few times so the
+  // final text is caught), on any observed shadow-root mutation, and at start.
+  function burst() { [400, 1500, 3500, 6000].forEach(ms => setTimeout(scheduleScan, ms)); }
+  window.addEventListener('chat-messenger-response-received', burst);
+  window.addEventListener('chat-messenger-request-sent', burst);
   let obsTries = 0;
   const obsIv = setInterval(() => {
     const cm = document.querySelector('chat-messenger');
     if (cm && cm.shadowRoot) {
-      new MutationObserver(scheduleScan).observe(cm.shadowRoot, { childList: true, subtree: true, characterData: true });
       clearInterval(obsIv);
-      scheduleScan();
+      runScan();                                 // also wires observers to all current roots
     }
     if (++obsTries > 60) clearInterval(obsIv);
   }, 500);
-  // Also nudge on the widget's own response events (covers shadow re-renders).
-  window.addEventListener('chat-messenger-response-received', scheduleScan);
 })();
 
 // ─────────────────────────────────────────────────────────────────────────
