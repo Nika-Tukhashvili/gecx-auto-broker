@@ -68,19 +68,41 @@
     const low=rest.toLowerCase(); for(const m of TWO_WORD) if(low.startsWith(m)){make=rest.slice(0,m.length);break;}
     return {year,make:make.trim(),model:rest.slice(make.length).trim(),trim};
   }
+  // Pick the first non-empty, non-placeholder value among candidate fields.
+  function pick(...vals){
+    for(const v of vals){ const s=(v==null?'':String(v)).trim(); if(s && s!=='---' && s.toLowerCase()!=='null' && s.toLowerCase()!=='unknown') return s; }
+    return '';
+  }
+  let LOGGED_RAW=false;
   function toCar(r){
     const key=r.vin||r.lot; if(!key) return null;
+    if(!LOGGED_RAW){ LOGGED_RAW=true;
+      console.log('🔬 RAW record keys:',Object.keys(r).join(', '));
+      if(r.specs) console.log('🔬 RAW specs keys:',Object.keys(r.specs).join(', '),r.specs);
+    }
     const {year,make,model,trim}=parseName(r.name_long||r.name);
+    const sp=r.specs||{};
     // Use the most realistic figure: the auction's value estimate or the highest
     // real bid signal — NOT the low starting bid (which is often just $15–$100).
     const bid=Math.max(money(r.final_bid),money(r.prebid_price),Number(r.estimated_max)||0,Number(r.estimated_min)||0)||0;
     return {_k:key,lotId:r.lot,vin:r.vin,year,make,model,trim,
       damage:(r.primary_damage&&r.primary_damage!=='---')?r.primary_damage:'',
+      secondaryDamage:pick(r.secondary_damage),
       mileage:typeof r.odometer==='number'?r.odometer:null,runsDrives:r.start_code||'',
-      hasKeys:(r.specs&&r.specs.key_info==='Present')?'YES':'',engine:(r.specs&&r.specs.engine_rendered)||'',
+      hasKeys:(sp.key_info==='Present')?'YES':'',engine:sp.engine_rendered||'',
+      // Visual/spec attributes the chat agent gets asked about — capture them all,
+      // trying every plausible raw field name (exact names vary; the 🔬 log confirms).
+      color:pick(sp.color,sp.exterior_color,sp.color_rendered,r.color,r.exterior_color,r.color_name),
+      bodyStyle:pick(sp.body_style,sp.body,r.body_style,r.body,r.vehicle_type_rendered),
+      fuelType:pick(sp.fuel,sp.fuel_type,r.fuel,r.fuel_type),
+      transmission:pick(sp.transmission,r.transmission),
+      drive:pick(sp.drive,sp.drive_line_type,r.drive,r.drive_line_type),
+      cylinders:pick(sp.cylinders,r.cylinders),
       titleType:r.sale_document||'',titleState:r.sale_document_state||'',location:r.location||'',
       status:r.search_status||'',estimatedBid:bid,priceLabel:r.final_bid_formatted||r.prebid_price||'',
       buyNow:money(r.buy_now_price)||null,
+      // bid.cars's own detail-page URL if the API exposes it (for exact deep links)
+      lotUrl:pick(r.url,r.lot_url,r.link,r.detail_url,r.slug),
       image:(r.img&&r.img.img_1)||((r.img_large&&r.img_large.img_1)||''),
       imageLarge:(r.img_large&&r.img_large.img_1)||''};
   }
