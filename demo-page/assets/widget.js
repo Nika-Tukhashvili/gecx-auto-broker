@@ -235,7 +235,9 @@ function bridgeToast(msg) {
       const strs = collectStrings(e && e.detail, 0, []);
       strs.forEach(trackCar);
       const text = strs.join('\n');
-      const ref = (text.match(/LD-[A-Za-z0-9]+/) || [])[0];
+      // real create_lead references are exactly LD-<6 digits>; anything else
+      // (e.g. a date-shaped "LD-20231008-1") is a hallucinated ref — ignore it
+      const ref = (text.match(/\bLD-\d{6}\b(?!-)/) || [])[0];
       if (!ref) return;
       let arr = [];
       try { arr = JSON.parse(localStorage.getItem(KEY) || '[]'); } catch (x) {}
