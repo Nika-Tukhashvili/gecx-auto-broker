@@ -35,6 +35,9 @@ function bridgeToast(msg) {
 (function leadBridge() {
   const KEY = 'broker_leads_v1';
   const recentUser = [];
+  // Rolling record of the "current car" seen anywhere in the conversation
+  // (user pastes + agent replies), so a captured lead carries its lot/photo/link.
+  const car = { lot: null, image: null, link: null, vehicle: null };
 
   function collectStrings(o, depth, acc) {
     if (depth > 8 || o == null) return acc;
@@ -51,24 +54,48 @@ function bridgeToast(msg) {
     if (/[\/{}]|projects\/|locations\/|sessions\/|dfMessenger|reasoningEngines|https?:|audioEncoding|deployment/i.test(s)) return false;
     return /[a-zA-Z]/.test(s) || /\d{5,}/.test(s);
   }
+
+  // Track the current car from any text (user paste or agent reply). Later text wins.
+  function trackCar(text) {
+    if (!text) return;
+    const img = text.match(/https?:\/\/images\.bid\.cars\/[^\s"'()<>]+?\.(?:jpe?g|png|webp)/i);
+    if (img) car.image = img[0].replace(/[).,]+$/, '');
+    const link = text.match(/https?:\/\/bid\.cars\/en\/lot\/[^\s"'()<>]+/i);
+    if (link) car.link = link[0].replace(/[).,]+$/, '');
+    // lot id: from the auction link path, else a bare "1-77215095" / "0-45043310"
+    const fromLink = car.link && car.link.match(/\/lot\/([^\/\s]+)/);
+    const bare = text.match(/\b(\d-\d{6,9})\b/);
+    if (fromLink) car.lot = fromLink[1];
+    else if (bare) car.lot = bare[1];
+    // vehicle "YEAR Make Model" (e.g. from the "I'm interested in lot …: 2026 Toyota Corolla" paste
+    // or the agent's "**2026 Toyota Corolla LE**" heading)
+    const veh = text.match(/\b((?:19|20)\d{2}\s+[A-Z][A-Za-z.\-]+(?:\s+[A-Za-z0-9.\-]+){1,3})/);
+    if (veh) car.vehicle = veh[1].replace(/[*_]/g, '').trim();
+  }
+  // If we have a lot + a bid.cars link but no photo, derive the first thumbnail:
+  // the link tail IS the image "tag" (year-make-model-vin); we just lack the id hash,
+  // so we can only set image when the agent actually included an images.bid.cars URL.
+
   function onUser(e) {
     try {
-      const strs = collectStrings(e && e.detail, 0, []).filter(isHuman);
-      // the user's typed query is usually the longest human-ish string
-      const cand = strs.sort((a, b) => b.length - a.length)[0];
+      const all = collectStrings(e && e.detail, 0, []);
+      all.forEach(trackCar);
+      const cand = all.filter(isHuman).sort((a, b) => b.length - a.length)[0];
       if (cand) { recentUser.push(cand.trim()); if (recentUser.length > 15) recentUser.shift(); }
     } catch (err) {}
   }
 
   function onResponse(e) {
     try {
-      const text = collectStrings(e && e.detail, 0, []).join('\n');
+      const strs = collectStrings(e && e.detail, 0, []);
+      strs.forEach(trackCar);
+      const text = strs.join('\n');
       const ref = (text.match(/LD-[A-Za-z0-9]+/) || [])[0];
       if (!ref) return;
       let arr = [];
       try { arr = JSON.parse(localStorage.getItem(KEY) || '[]'); } catch (x) {}
       if (arr.some(l => l.ref === ref)) return;
-      const veh = (text.match(/for (?:the|your)\s+((?:19|20)\d{2}\s+[A-Za-z][\w .\-]+?)[.\n,]/) || [])[1];
+      const veh = (text.match(/for (?:the|your)\s+((?:19|20)\d{2}\s+[A-Za-z][\w .\-]+?)[.\n,]/) || [])[1] || car.vehicle;
       // phone: first clean phone-like digit run across recent user messages
       let phone = null;
       for (const m of [...recentUser].reverse()) {
@@ -88,6 +115,7 @@ function bridgeToast(msg) {
       arr.unshift({
         name: name || 'Chat lead', phone: phone || '—', brand: 'Caucasus Auto Import',
         status: 'new', vehicle: veh || '', criteria: veh ? '' : 'Captured via AI assistant',
+        lot: car.lot || '', image: car.image || '', link: car.link || '',
         ref, ago: 'just now', source: 'AI assistant',
       });
       localStorage.setItem(KEY, JSON.stringify(arr));

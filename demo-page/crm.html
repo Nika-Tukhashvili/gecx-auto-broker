@@ -132,8 +132,11 @@
         const thumb = l.image
           ? `<img class="lead-thumb" src="${l.image}" alt="" onerror="this.style.visibility='hidden'">`
           : `<div class="lead-thumb"></div>`;
+        const lotBit = l.lot
+          ? ` · ${l.link ? `<a href="${l.link}" target="_blank" rel="noopener" style="color:var(--ms-magenta);text-decoration:none">Lot ${l.lot} ↗</a>` : `Lot ${l.lot}`}`
+          : '';
         const interest = l.vehicle
-          ? `<div class="veh">🚗 ${l.vehicle}${l.lot ? ` · Lot ${l.lot}` : ''}</div>`
+          ? `<div class="veh">🚗 ${l.vehicle}${lotBit}</div>`
           : `<div class="crit">🔎 ${l.criteria || 'General enquiry'}</div>`;
         return `<div class="lead">
           <div class="lead-top">
