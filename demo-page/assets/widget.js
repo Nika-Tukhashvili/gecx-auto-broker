@@ -36,23 +36,42 @@ function bridgeToast(msg) {
 // ─────────────────────────────────────────────────────────────────────────
 (function chatMediaEnrichment() {
   const LOT_RE = /\b(\d-\d{6,9})\b/g;
-  let map = null, loading = null;
+  // fallback: "Lot #45425532" with the 0-/1- prefix dropped by the model
+  const LOT_BARE_RE = /Lot\s*#?\s*(\d{7,9})\b/gi;
+  let map = null, loading = null, digitsIdx = null;
 
   function loadMap() {
     if (!loading) {
       loading = fetch('lot_media.json').then(r => (r.ok ? r.json() : {}))
-        .then(m => { map = m; return m; }).catch(() => { map = {}; return map; });
+        .then(m => {
+          map = m;
+          digitsIdx = {};
+          for (const k of Object.keys(m)) {
+            const d = k.replace(/^\d-/, '');
+            // ambiguous bare digits (same number under 0- and 1-) → never guess
+            digitsIdx[d] = (d in digitsIdx) ? null : k;
+          }
+          return m;
+        }).catch(() => { map = {}; digitsIdx = {}; return map; });
     }
     return loading;
   }
-  window.__lotMedia = { get: id => (map ? map[id] : null), load: loadMap };
+  // resolve either a full id ("0-45425532") or bare digits ("45425532") to a map key
+  function resolve(id) {
+    if (!map) return null;
+    if (map[id]) return id;
+    const full = digitsIdx && digitsIdx[String(id).replace(/^\d-/, '')];
+    return full && map[full] ? full : null;
+  }
+  window.__lotMedia = { get: id => (map ? map[resolve(id)] : null), resolve, load: loadMap };
   window.lotMediaUrls = function (id) {
-    const e = map && map[id];
+    const full = resolve(id);
+    const e = full && map[full];
     if (!e) return null;
     const base = 'https://images.bid.cars/' + e[0] + '/' + e[1];
     return {
       images: [1, 2, 3].map(i => base + '-' + i + '.jpg'),
-      link: 'https://bid.cars/en/lot/' + id + '/' + e[1],
+      link: 'https://bid.cars/en/lot/' + full + '/' + e[1],
       tag: e[1],
     };
   };
@@ -91,17 +110,20 @@ function bridgeToast(msg) {
       if (el.tagName === 'SCRIPT' || el.tagName === 'STYLE' || el.tagName === 'TEXTAREA') continue;
       const text = el.textContent || '';
       if (text.length > 4000) continue;         // skip huge containers
-      const ids = [...new Set([...text.matchAll(LOT_RE)].map(m => m[1]))];
-      for (const id of ids) {
-        // deepest node: no child element also contains this id
+      const raws = [...text.matchAll(LOT_RE)].map(m => m[1])
+        .concat([...text.matchAll(LOT_BARE_RE)].map(m => m[1]));
+      const pairs = {};                          // resolved id -> raw string as it appears in text
+      for (const raw of raws) { const id = resolve(raw); if (id && !(id in pairs)) pairs[id] = raw; }
+      for (const id of Object.keys(pairs)) {
+        // deepest node: no child element also contains this lot (as written in the text)
+        const raw = pairs[id];
         let deepest = true;
         for (const c of el.children) {
-          if ((c.textContent || '').includes(id)) { deepest = false; break; }
+          if ((c.textContent || '').includes(raw)) { deepest = false; break; }
         }
         if (!deepest) continue;
         // one strip per lot id per element (an element may mention several lots)
         if (el.querySelector && el.querySelector('.lot-media-strip[data-lot="' + id + '"]')) continue;
-        if (!map || !map[id]) continue;
         const strip = buildStrip(id);
         if (strip) { strip.dataset.lot = id; el.appendChild(strip); }
       }
@@ -115,8 +137,8 @@ function bridgeToast(msg) {
       const cm = document.querySelector('chat-messenger');
       if (!cm) return;
       const txt = (cm.shadowRoot && cm.shadowRoot.textContent) || '';
-      if (!LOT_RE.test(txt)) { LOT_RE.lastIndex = 0; return; }
-      LOT_RE.lastIndex = 0;
+      const hasLot = /\b\d-\d{6,9}\b/.test(txt) || /Lot\s*#?\s*\d{7,9}\b/i.test(txt);
+      if (!hasLot) return;
       loadMap().then(() => scan(cm.shadowRoot || cm, new Set()));
     }, 600);
   }
