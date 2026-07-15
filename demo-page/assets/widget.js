@@ -26,6 +26,55 @@ function bridgeToast(msg) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
+// Session/token guard. The chat SDK stores the session id and its auth token
+// as SEPARATE sessionStorage keys; when the 30-min session expires it clears
+// the session keys but NOT the token, then mints a new session that reuses
+// the stale token → every request 403s with "Session claim does not match
+// the session name" and Retry can never recover. This runs BEFORE the
+// (deferred) SDK: if the stored token's session claim doesn't match the
+// current session (or the session is gone/expired), drop the token so the
+// token broker mints a fresh one.
+// ─────────────────────────────────────────────────────────────────────────
+(function sessionTokenGuard() {
+  function tokenSessionClaim(tok) {
+    try {
+      const payload = JSON.parse(atob(tok.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+      const m = JSON.stringify(payload).match(/dfMessenger-[0-9a-fA-F-]+/);
+      return m ? m[0] : null;
+    } catch (e) { return null; }
+  }
+  function dropStaleToken() {
+    try {
+      const SS = window.sessionStorage;
+      const tok = SS.getItem('chat-messenger-access-token');
+      if (!tok) return false;
+      const sid = SS.getItem('chat-messenger-sessionID');
+      const exp = SS.getItem('chat-messenger-session-id-expires-at');
+      const claim = tokenSessionClaim(tok);
+      const sessionGone = !sid || (exp && new Date(exp) < new Date());
+      const mismatch = !!(claim && sid && claim !== sid);
+      if (sessionGone || mismatch) {
+        SS.removeItem('chat-messenger-access-token');
+        SS.removeItem('chat-messenger-access-token-expires-at');
+        return true;
+      }
+    } catch (e) {}
+    return false;
+  }
+  window.__dropStaleChatToken = dropStaleToken;   // exposed for testing
+  dropStaleToken();
+  // Runtime recovery: if the widget errors mid-session with a broken
+  // token↔session binding, clear it and reload once so a fresh token is minted.
+  let recovered = false;
+  window.addEventListener('chat-messenger-error', () => {
+    if (dropStaleToken() && !recovered) {
+      recovered = true;
+      setTimeout(() => window.location.reload(), 400);
+    }
+  });
+})();
+
+// ─────────────────────────────────────────────────────────────────────────
 // Chat media enrichment. The agent's replies deliberately contain NO URLs
 // (the voice engine reads URLs aloud character-by-character) — only lot
 // numbers like "Lot #0-45210399". This module watches the chat's (open)
