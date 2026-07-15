@@ -211,37 +211,45 @@ function bridgeToast(msg) {
     return /[a-zA-Z]/.test(s) || /\d{5,}/.test(s);
   }
 
-  // Track the current car from any text (user paste or agent reply). Later text wins.
-  // Agent replies carry no URLs (voice would read them aloud) — just lot numbers —
-  // so image/link are derived from the lot id via the shared lot_media map.
+  // Fill car.image/link/vehicle for the current car.lot from the media map.
+  // If the lot can't be resolved, CLEAR image/link — carrying over a previous
+  // car's media is exactly the wrong-car-on-the-lead-card bug.
+  function applyLotMedia() {
+    if (!car.lot || !window.lotMediaUrls) return;
+    if (window.__lotMedia) window.__lotMedia.load();
+    const u = window.lotMediaUrls(car.lot);
+    if (!u) { car.image = null; car.link = null; return; }
+    car.image = u.images[0];
+    car.link = u.link;
+    // tag is "YEAR-Make-Model[-Trim…][-VIN]"; drop a trailing VIN-ish token
+    const parts = u.tag.split('-').filter(p => !/^[A-HJ-NPR-Z0-9]{11,}$/i.test(p));
+    car.vehicle = parts.join(' ');
+  }
+
+  // Track the current car. CRITICAL: a message that mentions SEVERAL lot ids is a
+  // search-results LIST — it says nothing about which car the client picked, so it
+  // must NOT move the pointer (the old first-match rule pinned the cheapest car and
+  // sent the WRONG car/link to the portal). Only single-lot texts (a pasted lot, a
+  // detail reply, a lead confirmation) update the current car.
   function trackCar(text) {
     if (!text) return;
-    const img = text.match(/https?:\/\/images\.bid\.cars\/[^\s"'()<>]+?\.(?:jpe?g|png|webp)/i);
-    if (img) car.image = img[0].replace(/[).,]+$/, '');
     const link = text.match(/https?:\/\/bid\.cars\/en\/lot\/[^\s"'()<>]+/i);
-    if (link) car.link = link[0].replace(/[).,]+$/, '');
-    // lot id: from the auction link path, else a bare "1-77215095" / "0-45043310"
-    const fromLink = car.link && car.link.match(/\/lot\/([^\/\s]+)/);
-    const bare = text.match(/\b(\d-\d{6,9})\b/);
-    if (fromLink) car.lot = fromLink[1];
-    else if (bare) car.lot = bare[1];
-    if (car.lot && window.lotMediaUrls) {
-      if (window.__lotMedia) window.__lotMedia.load();
-      const u = window.lotMediaUrls(car.lot);
-      if (u) {
-        if (!img) car.image = u.images[0];
-        if (!link) car.link = u.link;
-        if (!car.vehicle) {
-          // tag is "YEAR-Make-Model[-Trim…][-VIN]"; drop a trailing VIN-ish token
-          const parts = u.tag.split('-').filter(p => !/^[A-HJ-NPR-Z0-9]{11,}$/i.test(p));
-          car.vehicle = parts.join(' ');
-        }
-      }
+    if (link) {
+      car.link = link[0].replace(/[).,]+$/, '');
+      const fromLink = car.link.match(/\/lot\/([^\/\s]+)/);
+      if (fromLink) { car.lot = fromLink[1]; applyLotMedia(); }
     }
-    // vehicle "YEAR Make Model" (e.g. from the "I'm interested in lot …: 2026 Toyota Corolla" paste
-    // or the agent's "**2026 Toyota Corolla LE**" heading)
-    const veh = text.match(/\b((?:19|20)\d{2}\s+[A-Z][A-Za-z.\-]+(?:\s+[A-Za-z0-9.\-]+){1,3})/);
-    if (veh) car.vehicle = veh[1].replace(/[*_]/g, '').trim();
+    const ids = [...new Set([...text.matchAll(/\b(\d-\d{6,9})\b/g)].map(m => m[1]))];
+    if (ids.length === 1 && ids[0] !== car.lot) {
+      car.lot = ids[0];
+      applyLotMedia();
+    }
+    // vehicle "YEAR Make Model" — only from single-car texts, so a results list
+    // doesn't overwrite it with the first row's title
+    if (ids.length <= 1) {
+      const veh = text.match(/\b((?:19|20)\d{2}\s+[A-Z][A-Za-z.\-]+(?:\s+[A-Za-z0-9.\-]+){1,3})/);
+      if (veh) car.vehicle = veh[1].replace(/[*_]/g, '').trim();
+    }
   }
 
   function onUser(e) {
@@ -265,31 +273,51 @@ function bridgeToast(msg) {
       let arr = [];
       try { arr = JSON.parse(localStorage.getItem(KEY) || '[]'); } catch (x) {}
       if (arr.some(l => l.ref === ref)) return;
-      const veh = (text.match(/for (?:the|your)\s+((?:19|20)\d{2}\s+[A-Za-z][\w .\-]+?)[.\n,]/) || [])[1] || car.vehicle;
+      // The confirmation message itself is the most authoritative source for WHICH
+      // car the lead is about — the agent restates "… for the <car>, Lot #<id>".
+      // If it names lot id(s), the LAST one wins over whatever we tracked earlier.
+      const confIds = [...text.matchAll(/\b(\d-\d{6,9})\b/g)].map(m => m[1]);
+      if (confIds.length) car.lot = confIds[confIds.length - 1];
+      const confVeh = (text.match(/for (?:the|your)\s+((?:19|20)\d{2}\s+[A-Za-z][\w .\-]+?)[.\n,]/) || [])[1];
       // phone: first clean phone-like digit run across recent user messages
       let phone = null;
       for (const m of [...recentUser].reverse()) {
         const hit = m.match(/\+?\d[\d\s().\-]{5,}\d/);
         if (hit && hit[0].replace(/\D/g, '').length >= 7) { phone = hit[0].trim(); break; }
       }
-      // name: a recent message that, with digits/punct stripped, reads like a person's name
+      // name: prefer an explicit "my name is X" phrasing; else a short digit-free
+      // message that reads like a person's name (phone-bearing messages excluded)
       let name = null;
       for (const m of [...recentUser].reverse()) {
+        const said = m.match(/(?:my name is|name's|i am|i'm|this is)\s+([A-Za-z][A-Za-z '\-]{1,40})/i);
+        if (said) { name = said[1].replace(/[.,!?].*$/, '').trim(); break; }
+      }
+      if (!name) for (const m of [...recentUser].reverse()) {
+        if ((m.match(/\d/g) || []).length >= 4) continue;   // phone-ish message, not a name
         const stripped = m.replace(/[\d+().\-]/g, '').replace(/[.,]/g, ' ').replace(/\s+/g, ' ').trim();
         const words = stripped.split(' ').filter(Boolean);
         if (words.length >= 1 && words.length <= 3 && /^[A-Za-z][A-Za-z '\-]{1,}$/.test(stripped) &&
-            !/^(yes|no|ok|okay|show|more|hi|hello|thanks|calculate|find|search|buy|under|toyota|porsche|corolla|hybrid|black|white|red)/i.test(stripped)) {
+            !/^(yes|no|ok|okay|show|more|hi|hello|thanks|calculate|find|search|buy|under|my|phone|number|toyota|porsche|corolla|hybrid|black|white|red)/i.test(stripped)) {
           name = stripped; break;
         }
       }
-      arr.unshift({
-        name: name || 'Chat lead', phone: phone || '—', brand: 'Caucasus Auto Import',
-        status: 'new', vehicle: veh || '', criteria: veh ? '' : 'Captured via AI assistant',
-        lot: car.lot || '', image: car.image || '', link: car.link || '',
-        ref, ago: 'just now', source: 'AI assistant',
-      });
-      localStorage.setItem(KEY, JSON.stringify(arr));
-      bridgeToast('✅ Lead ' + ref + ' saved to the Broker Portal');
+      // Write the lead only after the media map is ready, so lot → image/link/vehicle
+      // all describe the SAME car (stale car.image from an earlier lot was the source
+      // of wrong-car cards in the portal).
+      const finish = () => {
+        applyLotMedia();
+        const veh = confVeh || car.vehicle;
+        arr.unshift({
+          name: name || 'Chat lead', phone: phone || '—', brand: 'Caucasus Auto Import',
+          status: 'new', vehicle: veh || '', criteria: veh ? '' : 'Captured via AI assistant',
+          lot: car.lot || '', image: car.image || '', link: car.link || '',
+          ref, ago: 'just now', source: 'AI assistant',
+        });
+        localStorage.setItem(KEY, JSON.stringify(arr));
+        bridgeToast('✅ Lead ' + ref + ' saved to the Broker Portal');
+      };
+      if (window.__lotMedia && car.lot) window.__lotMedia.load().then(finish, finish);
+      else finish();
     } catch (err) {}
   }
 
