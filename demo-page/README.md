@@ -1,6 +1,6 @@
 # Universal AI Auto Broker — Demo Site
 
-White-label demo site for the multi-tenant auto-import agent built in CX Agent Studio.
+Demo site for the auto-import agent built in CX Agent Studio.
 Making Science branding (magenta `#f0076f` / navy `#073763`).
 
 ## Pages

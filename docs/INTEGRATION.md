@@ -1,6 +1,6 @@
 # Universal AI Auto Broker — Partner Integration Guide
 
-**Audience:** technical teams at auction marketplaces, salvage networks, and dealer platforms (e.g., Copart, IAAI, or regional aggregators) adopting the white-label AI Auto Broker.
+**Audience:** technical teams at auction marketplaces, salvage networks, and dealer platforms (e.g., Copart, IAAI, or regional aggregators) adopting the AI Auto Broker.
 
 **What the agent does:** conversational (chat + voice) assistant that searches your vehicle inventory, presents lots with photos and links, produces landed-cost and repair estimates, answers vehicle questions (including analyzing customer-uploaded photos), and captures qualified purchase leads for human brokers. The agent **never places bids** and never writes to inventory — it is read-only on vehicles and write-only on leads.
 
@@ -310,9 +310,9 @@ Leads carry name, phone, language, the exact lot (or criteria), budget, and cons
 
 ---
 
-## 5. Multi-tenant / white-label configuration
+## 5. Per-deployment configuration
 
-Per deployment we configure: brand name and greeting, destination port & customs formulas for landed-cost quotes (§1.5 — supplied by you, signed off on worked examples), broker service fee, callback SLA ("a broker calls within 15 minutes"), supported languages, lead destination (§4), and enabled features (photo inspection, repair estimates, semantic search). One partner can run multiple brands off one integration.
+Per deployment we configure: brand name and greeting, destination port & customs formulas for landed-cost quotes (§1.5 — supplied by you, signed off on worked examples), broker service fee, callback SLA ("a broker calls within 15 minutes"), supported languages, lead destination (§4), and enabled features (photo inspection, repair estimates, semantic search). A partner can run multiple brands, each as its own deployment, off one integration.
 
 ---
 

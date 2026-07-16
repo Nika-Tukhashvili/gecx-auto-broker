@@ -1,8 +1,8 @@
 # Universal AI Auto Broker
 
-White-label platform (by Making Science) that helps customers import cars from US auctions (Copart / IAAI) to Georgia — search live auction inventory, get transparent to-the-door cost estimates to Poti port, and hand qualified leads to a certified human broker. The AI never places bids itself.
+Platform (by Making Science) that helps customers import cars from US auctions (Copart / IAAI) — search live auction inventory, get transparent to-the-door cost estimates to the configured destination port (demo corridor: US → Georgia), and hand qualified leads to a certified human broker. The AI never places bids itself.
 
-Multi-tenant: brand identity is injected per client (Caucasus Auto Import, Lion Auto, …) via a session parameter.
+Brand identity, destination market and fees are per-client configuration; the demo runs one example brand.
 
 ## Repository layout
 
