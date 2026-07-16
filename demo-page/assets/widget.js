@@ -244,6 +244,27 @@ function bridgeToast(msg) {
   // (user pastes + agent replies), so a captured lead carries its lot/photo/link.
   const car = { lot: null, image: null, link: null, vehicle: null };
 
+  // The chat SESSION survives page reloads (sessionStorage) and restores its
+  // history — but restored messages do NOT re-fire widget events, so an
+  // in-memory-only car/recentUser is wiped by any mid-conversation reload and
+  // the lead then lands in the portal with no car attached. Persist the
+  // tracking state next to the chat session and restore it for the SAME
+  // session only.
+  const STATE_KEY = 'broker_bridge_state_v1';
+  function chatSid() { try { return window.sessionStorage.getItem('chat-messenger-sessionID') || ''; } catch (e) { return ''; } }
+  function saveState() {
+    try { window.sessionStorage.setItem(STATE_KEY, JSON.stringify({ sid: chatSid(), car, recentUser })); } catch (e) {}
+  }
+  (function restoreState() {
+    try {
+      const st = JSON.parse(window.sessionStorage.getItem(STATE_KEY) || 'null');
+      if (st && st.sid && st.sid === chatSid()) {
+        Object.assign(car, st.car || {});
+        (st.recentUser || []).slice(-15).forEach(m => recentUser.push(m));
+      }
+    } catch (e) {}
+  })();
+
   function collectStrings(o, depth, acc) {
     if (depth > 8 || o == null) return acc;
     if (typeof o === 'string') { if (o.trim()) acc.push(o); return acc; }
@@ -307,6 +328,7 @@ function bridgeToast(msg) {
       all.forEach(trackCar);
       const cand = all.filter(isHuman).sort((a, b) => b.length - a.length)[0];
       if (cand) { recentUser.push(cand.trim()); if (recentUser.length > 15) recentUser.shift(); }
+      saveState();
     } catch (err) {}
   }
 
@@ -314,6 +336,7 @@ function bridgeToast(msg) {
     try {
       const strs = collectStrings(e && e.detail, 0, []);
       strs.forEach(trackCar);
+      saveState();
       const text = strs.join('\n');
       // real create_lead references are exactly LD-<6 digits>; anything else
       // (e.g. a date-shaped "LD-20231008-1") is a hallucinated ref — ignore it
@@ -355,6 +378,7 @@ function bridgeToast(msg) {
       // of wrong-car cards in the portal).
       const finish = () => {
         applyLotMedia();
+        saveState();
         const veh = confVeh || car.vehicle;
         arr.unshift({
           name: name || 'Chat lead', phone: phone || '—', brand: 'Caucasus Auto Import',
