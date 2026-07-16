@@ -5,9 +5,9 @@ Companion documents: *GECX AI Support Agent — Architecture and Integration Opt
 
 ## Executive summary
 
-A white-label conversational agent that helps customers **import cars from US auctions (Copart/IAAI) to Georgia**. Over chat and voice it searches real auction inventory, shows cars with photos and auction links, produces itemized to-the-door cost estimates (Poti port), estimates repair costs — including genuine visual analysis of customer-uploaded damage photos — and hands qualified leads to human brokers. **The agent never places bids and never handles payments**; a certified broker completes every transaction.
+A white-label conversational agent that helps customers **import cars from US auctions (Copart/IAAI) to their home market**. Over chat and voice it searches real auction inventory, shows cars with photos and auction links, produces itemized to-the-door cost estimates for the configured destination port, estimates repair costs — including genuine visual analysis of customer-uploaded damage photos — and hands qualified leads to human brokers. **The agent never places bids and never handles payments**; a certified broker completes every transaction.
 
-Built on Google **CX Agent Studio** (Gemini, natively multimodal). The demo runs a fictional brand (AUTOBROKER.AI / "Caucasus Auto Import") with **58,356 real auction lots**, a public website with embedded chat, a landed-cost calculator page, and a broker lead portal. Multi-tenant by design: brand, fees, destination-port formulas, and lead routing are per-client configuration.
+Built on Google **CX Agent Studio** (Gemini, natively multimodal). The demo runs a fictional brand (AUTOBROKER.AI) with **58,356 real auction lots**, a public website with embedded chat, a landed-cost calculator page, and a broker lead portal. Multi-tenant and market-agnostic by design: brand, languages, fees, destination port, and customs formulas are per-client configuration — the demo is configured for one example corridor (US → Georgia), and the same platform serves e.g. a Spanish importer (Valencia/Algeciras port, EU duty + VAT) by configuration alone.
 
 ## 1. What the agent does
 
@@ -15,13 +15,13 @@ Built on Google **CX Agent Studio** (Gemini, natively multimodal). The demo runs
 
 **1.2 Presenting cars.** Results appear with photos and a "view all photos & live bid" button under each message. The agent tracks "the current car" across turns — "tell me more", "that one", "the red one" resolve without repeating lot numbers. It answers general automotive questions (typical reliability, fuel economy, common issues) from model knowledge, clearly labeled as general information.
 
-**1.3 Landed-cost estimate.** An itemized to-the-door breakdown: auction fees, inland US towing (region inferred from the yard's state), ocean freight to Poti, broker service fee, and Georgian customs/excise computed from engine size, vehicle age, and fuel type — using sensible defaults instead of interrogating the customer. Every figure is labeled an estimate that a human broker confirms before any bid.
+**1.3 Landed-cost estimate.** An itemized to-the-door breakdown: auction fees, inland US towing (region inferred from the yard's state), ocean freight to the destination port, broker service fee, and import duties/taxes computed from the tenant's customs formulas — in the demo, engine-size/age/fuel-based excise for the example corridor; for an EU market such as Spain, customs duty + VAT — using sensible defaults instead of interrogating the customer. Every figure is labeled an estimate that a human broker confirms before any bid.
 
 **1.4 Repair estimates & photo inspection.** From a listing's stated damage the agent gives an honest wide range ("severity unconfirmed — no photo"). When the customer uploads a photo, the agent genuinely analyzes it — damaged areas, severity, shattered glass, deployed airbags, likely structural damage — and prices each line using make-based parts tiers (a Porsche panel is not priced like a Corolla panel). Always a range, always with the human-inspector disclaimer.
 
 **1.5 Lead capture.** When the customer wants to proceed, the agent collects name and phone (used verbatim — names are never "corrected"), creates the lead, and reads back a short speakable reference (`LD-483920`). The lead appears in the broker portal tied to the exact car the customer chose — photo, lot number, and auction link included — with a 15-minute callback promise.
 
-**1.6 Channels & languages.** Text chat is fully functional (English/Georgian). Voice conversation works end-to-end for dialogue; see §5 for a current platform limitation on voice tool execution.
+**1.6 Channels & languages.** Text chat is fully functional and multilingual (the demo ships two languages; adding a market's language is configuration). Voice conversation works end-to-end for dialogue; see §5 for a current platform limitation on voice tool execution.
 
 ## 2. Guardrails and trust
 
@@ -38,17 +38,13 @@ Built on Google **CX Agent Studio** (Gemini, natively multimodal). The demo runs
 
 ## 3. How it works
 
-```
-Customer ↔ Website (chat/voice widget, GitHub Pages)
-                │
-                ▼
-        CX Agent Studio agent (Gemini) ── 6 typed tools:
-                │     search_inventory · get_lot · calculate_landing_cost
-                │     estimate_repair_cost · create_lead · update_user_profile
-                ▼
-        Inventory snapshot (58,356 lots, embedded for the demo)
-                │
-Website renders photos/links per lot number · Broker portal receives leads
+```mermaid
+flowchart TD
+    C["Customer — chat & voice on the client website"] --> A["AI agent — CX Agent Studio (Gemini)<br/>hardened instructions · guardrails · lot memory"]
+    A -- "6 typed tools" --> T["search_inventory · get_lot · calculate_landing_cost<br/>estimate_repair_cost · create_lead · update_user_profile"]
+    T --> I[("Inventory — demo: embedded snapshot, 58,356 lots")]
+    A --> L["Broker portal / CRM — receives leads"]
+    C -.-> W["Website enrichment — renders photos & auction buttons<br/>for every lot number the agent mentions"]
 ```
 
 - **Agent:** one root agent on CX Agent Studio with hardened instructions (honesty, lot memory, no-fabrication, verbatim references) plus safety guardrails and DLP redaction; changes ship as versioned deployments.
@@ -69,7 +65,7 @@ The demo is self-contained; a production deployment replaces its snapshot-and-st
 
 **4.3 Production runtime.** The demo runs on managed CX Agent Studio; for production we recommend the agent as an **ADK service (Cloud Run / Agent Engine)** behind the same tool contracts — enabling live database queries at any scale, model selection, response verification (every lot number checked against the database before it reaches the customer), server-side photo analysis of listing images, and fully working voice tool-calling. This is the "dedicated integration service" pattern from the general architecture document.
 
-**4.4 Per-tenant configuration.** Brand and greeting, destination port and customs formulas (supplied by the client's local brokerage, signed off on worked examples), service fees, callback SLA, languages, lead destination, enabled features.
+**4.4 Per-tenant configuration.** Brand and greeting, destination market — port, customs/duty formulas and currency (supplied by the client's local brokerage, signed off on worked examples; e.g. Georgia excise vs. Spanish EU duty + VAT), service fees, callback SLA, languages, lead destination, enabled features.
 
 ## 5. Current demo status and known limitations
 
