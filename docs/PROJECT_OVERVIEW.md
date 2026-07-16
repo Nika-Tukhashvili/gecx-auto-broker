@@ -25,31 +25,29 @@ Built on Google **CX Agent Studio** (Gemini, natively multimodal). The demo runs
 
 ## 2. Guardrails and trust
 
-| Situation | Agent behavior |
+| Topic | How the agent behaves |
 |---|---|
-| Bidding, payment, transfers | Refuses; only a certified human broker transacts |
-| Car not in tool results | Never invented — every car shown comes verbatim from a tool call; the website renders photos only for verified lots, so a hallucinated car would be visibly bare |
-| "What color is it?" (not in data) | Says the listing doesn't state it; offers photos or upload — never guesses |
-| Photos it hasn't seen | Never claims to see listing photos; only customer-uploaded images are analyzed |
-| Reference numbers | Only the exact tool-returned `LD-` reference, verbatim — never invented |
-| Prompt injection / "ignore instructions" | Treated as untrusted data; instructions and tool internals never disclosed |
-| Sensitive data | Only name + phone are collected; transcripts are DLP-redacted; no cards, IDs, or passwords, ever |
-| Out of scope (jobs, weather…) | One-line decline, steered back to vehicle import |
+| Transactions | Never bids and never takes payments — a certified human broker completes every deal |
+| Accuracy | Every vehicle detail, price, and reference number comes directly from inventory and business-system data |
+| Incomplete data | If a listing doesn't state something (e.g. color), the agent says so and points the customer to the photos or a quick photo check — it doesn't speculate |
+| Customer data | Only a name and phone number are collected; transcripts are automatically redacted; payment and ID data are never requested |
+| Security | Resistant to prompt-injection attempts; internal configuration is never disclosed |
+| Scope | Politely declines unrelated requests and returns the conversation to vehicle import |
 
 ## 3. How it works
 
 ```mermaid
 flowchart TD
-    C["Customer — chat & voice on the client website"] --> A["AI agent — CX Agent Studio (Gemini)<br/>hardened instructions · guardrails · lot memory"]
+    C["Customer — chat & voice on the client website"] --> A["AI agent — CX Agent Studio (Gemini)<br/>conversation design · guardrails · memory"]
     A -- "6 typed tools" --> T["search_inventory · get_lot · calculate_landing_cost<br/>estimate_repair_cost · create_lead · update_user_profile"]
     T --> I[("Inventory — demo: embedded snapshot, 58,356 lots")]
     A --> L["Broker portal / CRM — receives leads"]
     C -.-> W["Website enrichment — renders photos & auction buttons<br/>for every lot number the agent mentions"]
 ```
 
-- **Agent:** one root agent on CX Agent Studio with hardened instructions (honesty, lot memory, no-fabrication, verbatim references) plus safety guardrails and DLP redaction; changes ship as versioned deployments.
+- **Agent:** one root agent on CX Agent Studio with carefully engineered instructions (grounded answers, conversation memory, consistent references) plus safety guardrails and automatic transcript redaction; changes ship as versioned deployments.
 - **Tools:** typed Python functions with strict contracts; the demo embeds the inventory snapshot inside the search tools (a deliberate demo simplification — see §5).
-- **Media rendering:** the agent's replies deliberately contain no URLs (voice would read them aloud); the website detects lot numbers in chat and renders the photo strip and auction button from its own data. Side effect: links can never be hallucinated, and fabricated cars get no visuals — a structural honesty backstop.
+- **Media rendering:** the agent's replies contain no raw URLs (important for a clean voice experience); the website recognizes lot numbers in the conversation and renders each car's photo strip and auction button directly from inventory data — so visuals stay consistent across the chat, the website, and the broker portal.
 - **Broker portal:** demo-grade dashboard showing captured leads with car, photo, budget, and status.
 - **Data pipeline (demo):** a resumable scraper produces the inventory snapshot (58k lots with photos, damage, titles, locations, prices).
 
