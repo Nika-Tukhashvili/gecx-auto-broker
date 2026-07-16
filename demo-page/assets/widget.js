@@ -344,7 +344,6 @@ function bridgeToast(msg) {
       if (!ref) return;
       let arr = [];
       try { arr = JSON.parse(localStorage.getItem(KEY) || '[]'); } catch (x) {}
-      if (arr.some(l => l.ref === ref)) return;
       // The confirmation message itself is the most authoritative source for WHICH
       // car the lead is about — the agent restates "… for the <car>, Lot #<id>".
       // If it names lot id(s), the LAST one wins over whatever we tracked earlier.
@@ -357,6 +356,11 @@ function bridgeToast(msg) {
         const hit = m.match(/\+?\d[\d\s().\-]{5,}\d/);
         if (hit && hit[0].replace(/\D/g, '').length >= 7) { phone = hit[0].trim(); break; }
       }
+      // Duplicate guard: refs derive from the phone's tail, so two DIFFERENT people
+      // (or test numbers) can share a ref — "same ref" alone must not drop a lead.
+      // Skip only a true repeat: same ref AND same phone digits (or no phone to compare).
+      const newDigits = (phone || '').replace(/\D/g, '');
+      if (arr.some(l => l.ref === ref && (!newDigits || ((l.phone || '').replace(/\D/g, '') === newDigits)))) return;
       // name: prefer an explicit "my name is X" phrasing; else a short digit-free
       // message that reads like a person's name (phone-bearing messages excluded)
       let name = null;
