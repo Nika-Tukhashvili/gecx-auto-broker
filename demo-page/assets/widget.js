@@ -26,24 +26,35 @@ function bridgeToast(msg) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// Mobile: the chat dialog covers the whole page on a phone, and the widget
-// restores its open state across pages/reloads — which left the site unusable
-// when the chat came up already open. Start closed on small screens; the
-// bubble reopens it with one tap and the conversation is preserved.
+// Mobile chat toggle. On a phone the widget's dialog covers the whole page,
+// its own open-state persists across pages, and its internal close/minimize
+// states proved unreliable — so on small screens we control visibility
+// OURSELVES: the entire widget layer is display:none until our floating
+// button shows it. No SDK state is touched, so the conversation is kept and
+// the rest of the page stays fully tappable while the chat is hidden.
 // ─────────────────────────────────────────────────────────────────────────
-(function startChatClosedOnMobile() {
+(function mobileChatToggle() {
   if (window.innerWidth > 820) return;
-  let tries = 0;
-  const iv = setInterval(() => {
-    // the widget has no close() API — use the titlebar close button we slot in
-    const closeEl = document.querySelector('chat-messenger-close-button');
-    const btn = closeEl && (closeEl.shadowRoot || closeEl).querySelector('button');
-    if (btn) {
-      try { btn.click(); } catch (e) {}
-      clearInterval(iv);
-    }
-    if (++tries > 20) clearInterval(iv);
-  }, 300);
+  const style = document.createElement('style');
+  style.textContent =
+    'body.chat-hidden chat-messenger{display:none!important}' +
+    '#chat-fab{position:fixed;right:16px;bottom:16px;z-index:400;width:56px;height:56px;' +
+    'border-radius:50%;border:none;background:#f0076f;color:#fff;font-size:24px;line-height:1;' +
+    'box-shadow:0 6px 20px rgba(0,0,0,.3);cursor:pointer}' +
+    '#chat-fab.open{top:8px;right:8px;bottom:auto;width:42px;height:42px;font-size:18px;' +
+    'background:transparent;box-shadow:none}';
+  document.head.appendChild(style);
+  document.body.classList.add('chat-hidden');          // start closed on phones
+  const fab = document.createElement('button');
+  fab.id = 'chat-fab'; fab.type = 'button'; fab.textContent = '💬';
+  fab.setAttribute('aria-label', 'Open chat');
+  fab.addEventListener('click', () => {
+    const hidden = document.body.classList.toggle('chat-hidden');
+    fab.textContent = hidden ? '💬' : '✕';
+    fab.classList.toggle('open', !hidden);
+    fab.setAttribute('aria-label', hidden ? 'Open chat' : 'Close chat');
+  });
+  document.body.appendChild(fab);
 })();
 
 // ─────────────────────────────────────────────────────────────────────────
