@@ -1,6 +1,6 @@
-# GECX AI Auto Broker — Presentation Speech (~10 minutes)
+# GECX AI Auto Broker — Presentation Speech (~12 minutes)
 
-*Spoken talk track with live-demo cues. Plain text = say it. `[DO: …]` = do it on screen. Timing in brackets. Simple English (B2). ~1,300 words ≈ 9–10 minutes at a calm pace. Lines marked "optional" can be cut if you run long.*
+*Spoken talk track with live-demo cues. Plain text = say it. `[DO: …]` = do it on screen. Timing in brackets. Simple English (B2). Lines marked "optional" can be cut if you run long. The first 3–4 minutes are a pure product overview — no screen yet — based on the Project Overview document.*
 
 ---
 
@@ -15,27 +15,45 @@
 
 ---
 
-## 1. Opening — the problem *(0:00 – 0:45)*
+## Part 1 — Overview *(0:00 – 4:00, no screen yet)*
+
+### 1.1 The problem *(0:00 – 1:00)*
 
 Good morning, everyone. Before I show you any technology, let me tell you about a customer.
 
-He lives in Madrid — or Tbilisi, or Dubai. The story is the same everywhere. He knows that cars at US auctions like Copart are much cheaper than at home, even after shipping. His neighbor bought one. But when he tries it himself, he gets stuck. The listings are in a foreign language. The auction fees are confusing. Shipping, customs, repair costs — he doesn't know what the car will really cost until it is too late.
+He lives in Madrid — or Tbilisi, or Dubai. The story is the same everywhere. He knows that cars at US auctions like Copart and IAAI are much cheaper than at home, even after shipping. His neighbor bought one. But when he tries it himself, he gets stuck. The listings are in a foreign language. The auction fees are confusing. Shipping, customs, repair costs — he doesn't know what the car will really cost until it is too late.
 
-So he calls a broker. And the broker's team spends hours every day answering the same three questions on the phone: *what cars do you have, what will it really cost me, and is this car in good condition?*
+So he calls a broker. And the broker's team spends hours every day answering the same three questions on the phone: *what cars do you have, what will it really cost me, and is this car in good condition?* Every one of those calls is time the broker is not spending on customers who are ready to buy.
 
 That is the problem we built this product for.
 
-## 2. What we built *(0:45 – 1:45)*
+### 1.2 What it is, in one sentence *(1:00 – 1:45)*
 
-We built an **AI auto broker**. It is a chat assistant that lives on the importer's website. It does the work of a junior broker — but 24 hours a day, and in the customer's own language.
+We built an **AI auto broker** — a conversational agent, in chat and voice, that helps customers import cars from US auctions to their home market. It searches real auction inventory, shows cars with photos and auction links, produces an itemized to-the-door cost estimate, estimates repair costs — including a real look at customer-uploaded damage photos — and hands a qualified, ready lead to a human broker.
 
-It searches real auction inventory — in this demo, more than fifty-eight thousand real cars from Copart and IAAI. It shows photos and links to the auction pages. It calculates the full price to the customer's door — auction fees, transport, ocean shipping, customs. It estimates repair costs. It can even look at a photo of the damage and tell you what the repair will cost. And when the customer says "I want this one," it sends a ready lead to a human broker.
+One design decision is very important, and I want to say it clearly, right at the start: **the agent never places a bid and never touches payment.** It never even could — that action simply is not one of its tools. It informs the customer and prepares the deal. A certified human broker closes every transaction. The AI brings more customers in; the human stays in control of the money.
 
-One design decision is very important, and I want to say it clearly: **the AI never places bids and never touches money.** It informs the customer and prepares the deal. A certified human broker closes every deal. The AI brings more customers in — the human stays in control of the money.
+### 1.3 Who this is for *(1:45 – 2:45)*
 
-## 3. Live demo *(1:45 – 6:30)*
+Who is this built for? Three groups, really.
 
-Let me show you. This is a working product, live on the internet right now — not slides.
+First, **auction marketplaces and salvage networks** — the Coparts and IAAIs of the world, and regional aggregators like them — who want to turn their raw listings into a guided buying experience instead of a search box.
+
+Second, **import brokers and dealer platforms** — companies whose whole business today is a phone line and a spreadsheet, answering the same questions from customers in different countries, in different languages, at different times of night.
+
+And third, more broadly, anyone selling an **expensive, technical product where a human closes the deal** — because, as I'll come back to at the end, the pattern underneath this is not limited to cars.
+
+For all three, the value is the same: the AI does the qualifying conversation — the search, the honest pricing, the condition check — twenty-four hours a day, in the customer's own language, and only hands over a human's time once the customer is a real, ready lead.
+
+### 1.4 What you're about to see *(2:45 – 4:00)*
+
+So what you're about to see today is a **working demo**, not slides and not a mockup. It's built on Google's **CX Agent Studio**, using the Gemini model family, and it runs against **fifty-eight thousand real auction lots** — real cars, real photos, real damage descriptions, real prices — not sample data invented for a demo.
+
+It has three parts: the chat agent itself, embedded on a public website; a landed-cost calculator page; and a broker portal where the leads land. Everything you'll see — the brand, the language, the destination country, the fee schedule, the customs formula — is **configuration**, not custom code, and I'll explain exactly what that means for you near the end.
+
+Let's stop talking about it, and go look at it.
+
+## Part 2 — Live demo *(4:00 – 8:45)*
 
 **[DO: show the website, open the chat]**
 
@@ -79,7 +97,7 @@ And here is the other side of the business — the broker's portal. The lead is 
 
 That is the full loop: from an unknown website visitor to a ready lead for one specific car — with zero human time spent.
 
-## 4. How it is built — one minute *(6:30 – 7:45)*
+## Part 3 — How it is built *(8:45 – 9:45)*
 
 Now, briefly, for the technical people in the room.
 
@@ -87,7 +105,7 @@ It runs on **Google Cloud** — Google's enterprise agent platform, with the Gem
 
 Trust is built in. If the data does not say something — for example, the color — the assistant says so and points to the photos. It does not guess. It collects only a name and a phone number, and the conversations are automatically cleaned of personal data. And it politely refuses everything outside its job — including bids, payments, and financial advice.
 
-## 5. We can build this for you *(7:45 – 9:15)*
+## Part 4 — We can build this for you *(9:45 – 11:15)*
 
 Now the part that matters most for this room: what you just saw is a **platform, not a one-time project**.
 
@@ -97,7 +115,7 @@ To connect your inventory, there are two options — you choose what fits your c
 
 *(Optional, if the audience is wider than automotive:)* One more thought. The pattern under this product is universal: search a large inventory, explain the real costs, check the condition, prepare the customer, and hand the deal to a human expert. Today it is cars. The same engine works for real estate, machines — any expensive purchase where a specialist closes the deal.
 
-## 6. Close *(9:15 – 10:00)*
+## Part 5 — Close *(11:15 – 12:00)*
 
 To sum up. Customers get instant, honest answers, in their own language, at any hour. Brokers stop repeating themselves and receive ready, car-specific leads. And the business gets more customers at almost zero extra cost per conversation.
 
@@ -107,7 +125,7 @@ We would love to configure a pilot with your brand and your inventory. Thank you
 
 ---
 
-## Business Q&A *(not part of the 10 minutes)*
+## Business Q&A *(not part of the 12 minutes)*
 
 **"What if it gives a wrong price?"** — Every number is marked as an estimate and comes from data, not from guessing. A certified broker confirms the final price before any bid. The AI brings the customers in; the human makes the commitment.
 

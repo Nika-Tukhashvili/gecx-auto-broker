@@ -280,6 +280,13 @@ chat-messenger {
   --chat-messenger-internal-chat-bubble-icon-color: #ffffff;
 }
 
+/* ── The bubble launcher is never used (we drive open/close with our own
+   #chat-fab) but stays in the DOM. Left visible it sits in the panel's
+   normal flow above the titlebar, pushing the whole container ~64px past
+   the bottom of the screen — which is what hid the composer's upload/mic
+   buttons below the fold. Hiding it removes that offset entirely. ── */
+chat-messenger-chat-bubble { display: none !important; }
+
 /* ── Chat widget stacking: the slide-in panel and its titlebar (with the
    close button) must render ABOVE the sticky nav (z=100), or on phones the
    titlebar hides behind it and the chat cannot be closed. The gstatic layout

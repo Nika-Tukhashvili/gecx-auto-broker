@@ -50,33 +50,18 @@ function bridgeToast(msg) {
     '#chat-fab{position:fixed;right:20px;bottom:20px;z-index:2147483000;width:56px;height:56px;' +
     'border-radius:50%;border:none;background:#f0076f;color:#fff;font-size:24px;line-height:56px;' +
     'text-align:center;box-shadow:0 6px 20px rgba(0,0,0,.3);cursor:pointer;padding:0}' +
-    '#chat-fab.open{width:36px;height:36px;font-size:18px;line-height:36px;' +
-    'background:rgba(0,0,0,.4);box-shadow:none}';
+    // Docked look: once open, the same button relocates INSIDE the titlebar
+    // (see setOpen) so it renders alongside the SDK's own new-chat/expand
+    // icons — a small white circle matching their style, laid out by normal
+    // flex flow instead of a measured absolute position.
+    '#chat-fab.docked{position:static;width:32px;height:32px;border-radius:50%;' +
+    'background:#fff;color:#333;font-size:16px;line-height:32px;box-shadow:none;margin:0 4px 0 0}';
   document.head.appendChild(style);
   document.body.classList.add('chat-hidden');            // start closed on every device
 
   const fab = document.createElement('button');
   fab.id = 'chat-fab'; fab.type = 'button'; fab.textContent = '💬';
   fab.setAttribute('aria-label', 'Open chat');
-
-  // When open, sit the ✕ just to the LEFT of the widget's "new chat" button
-  // (measured live) so the two never overlap. Returns true once placed. The
-  // panel slides in over ~0.4s and its titlebar isn't at a fixed offset, so we
-  // retry until the button is measurable and on-screen, then keep it aligned
-  // on resize/scroll.
-  let placeIv = null;
-  function placeClose() {
-    const reset = document.querySelector('chat-reset-session-button');
-    const rr = reset && reset.getBoundingClientRect();
-    if (rr && rr.width && rr.left > 0 && rr.left < window.innerWidth) {
-      fab.style.top = (rr.top + (rr.height - 36) / 2) + 'px';
-      fab.style.left = (rr.left - 44) + 'px';
-      fab.style.right = 'auto'; fab.style.bottom = 'auto';
-      return true;
-    }
-    return false;
-  }
-  window.addEventListener('resize', () => { if (!document.body.classList.contains('chat-hidden')) placeClose(); });
 
   function setOpen(open) {
     document.body.classList.toggle('chat-hidden', !open);
@@ -93,13 +78,24 @@ function bridgeToast(msg) {
       document.body.style.setProperty('overflow', 'auto', 'important');
     }
     fab.textContent = open ? '✕' : '💬';
-    fab.classList.toggle('open', open);
+    fab.classList.toggle('docked', open);
     fab.setAttribute('aria-label', open ? 'Close chat' : 'Open chat');
-    fab.style.cssText = '';                                    // reset to CSS-defined position
-    clearInterval(placeIv);
-    if (open) {                                               // retry placement until the panel settles
-      let n = 0;
-      placeIv = setInterval(() => { if (placeClose() || ++n > 25) clearInterval(placeIv); }, 100);
+    // Reparent into the titlebar-actions slot when open. This matters for the
+    // fullscreen "expand" mode (chat-toggle-dialog-button): that mode renders
+    // the panel as a native <dialog>, which paints in the browser's top layer
+    // ABOVE every normal-DOM element — no z-index can out-rank it, so a
+    // fixed-position button floating in document.body would be invisible
+    // behind it. Slotting our button as a titlebar-actions child instead
+    // means it's part of the SAME projected content, so it's carried into
+    // the top layer with everything else — in both slide-in and expanded
+    // dialog mode, docked or floating repositions itself for free.
+    const container = document.querySelector('chat-messenger-container');
+    if (open && container) {
+      fab.setAttribute('slot', 'titlebar-actions');
+      container.appendChild(fab);
+    } else {
+      fab.removeAttribute('slot');
+      document.body.appendChild(fab);
     }
   }
   setOpen(false);   // enforce the closed layout immediately (clears any reserved space)
