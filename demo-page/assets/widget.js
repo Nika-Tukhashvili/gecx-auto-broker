@@ -39,25 +39,70 @@ function bridgeToast(msg) {
 (function chatToggle() {
   const style = document.createElement('style');
   style.textContent =
+    // Hide the widget AND release the space it reserves. The SDK adds
+    // body{overflow:hidden} and a right-side padding while it thinks the chat
+    // is open; display:none alone leaves those in place (frozen scroll + an
+    // empty white strip on the right). Adding the SDK's own `messenger-hidden`
+    // class makes its `:not(.messenger-hidden)` rules stop matching, releasing
+    // both — and these !important overrides are a belt-and-suspenders backup.
     'body.chat-hidden chat-messenger{display:none!important}' +
-    'body.chat-hidden{overflow:auto!important}' +                 // release the SDK scroll-lock
+    'body.chat-hidden{overflow:auto!important;padding-right:0!important}' +
     '#chat-fab{position:fixed;right:20px;bottom:20px;z-index:2147483000;width:56px;height:56px;' +
     'border-radius:50%;border:none;background:#f0076f;color:#fff;font-size:24px;line-height:56px;' +
-    'text-align:center;box-shadow:0 6px 20px rgba(0,0,0,.3);cursor:pointer;padding:0;transition:opacity .15s}' +
-    '#chat-fab.open{top:14px;right:14px;bottom:auto;width:40px;height:40px;font-size:20px;line-height:40px;' +
-    'background:rgba(0,0,0,.35);box-shadow:none}';
+    'text-align:center;box-shadow:0 6px 20px rgba(0,0,0,.3);cursor:pointer;padding:0}' +
+    '#chat-fab.open{width:36px;height:36px;font-size:18px;line-height:36px;' +
+    'background:rgba(0,0,0,.4);box-shadow:none}';
   document.head.appendChild(style);
   document.body.classList.add('chat-hidden');            // start closed on every device
 
   const fab = document.createElement('button');
   fab.id = 'chat-fab'; fab.type = 'button'; fab.textContent = '💬';
   fab.setAttribute('aria-label', 'Open chat');
+
+  // When open, sit the ✕ just to the LEFT of the widget's "new chat" button
+  // (measured live) so the two never overlap. Returns true once placed. The
+  // panel slides in over ~0.4s and its titlebar isn't at a fixed offset, so we
+  // retry until the button is measurable and on-screen, then keep it aligned
+  // on resize/scroll.
+  let placeIv = null;
+  function placeClose() {
+    const reset = document.querySelector('chat-reset-session-button');
+    const rr = reset && reset.getBoundingClientRect();
+    if (rr && rr.width && rr.left > 0 && rr.left < window.innerWidth) {
+      fab.style.top = (rr.top + (rr.height - 36) / 2) + 'px';
+      fab.style.left = (rr.left - 44) + 'px';
+      fab.style.right = 'auto'; fab.style.bottom = 'auto';
+      return true;
+    }
+    return false;
+  }
+  window.addEventListener('resize', () => { if (!document.body.classList.contains('chat-hidden')) placeClose(); });
+
   function setOpen(open) {
     document.body.classList.toggle('chat-hidden', !open);
+    // The SDK reserves a right-side padding and locks page scroll via its own
+    // !important stylesheet rules while the chat is "open". We fake open/closed
+    // without touching SDK state, so on CLOSE we must override those — and only
+    // an INLINE style beats a stylesheet !important. On OPEN we remove the
+    // overrides so the SDK reserves space for the panel as intended.
+    if (open) {
+      document.body.style.removeProperty('padding-right');
+      document.body.style.removeProperty('overflow');
+    } else {
+      document.body.style.setProperty('padding-right', '0', 'important');
+      document.body.style.setProperty('overflow', 'auto', 'important');
+    }
     fab.textContent = open ? '✕' : '💬';
     fab.classList.toggle('open', open);
     fab.setAttribute('aria-label', open ? 'Close chat' : 'Open chat');
+    fab.style.cssText = '';                                    // reset to CSS-defined position
+    clearInterval(placeIv);
+    if (open) {                                               // retry placement until the panel settles
+      let n = 0;
+      placeIv = setInterval(() => { if (placeClose() || ++n > 25) clearInterval(placeIv); }, 100);
+    }
   }
+  setOpen(false);   // enforce the closed layout immediately (clears any reserved space)
   fab.addEventListener('click', () => setOpen(document.body.classList.contains('chat-hidden')));
   document.body.appendChild(fab);
 

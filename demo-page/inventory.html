@@ -256,7 +256,7 @@
       toast('✅ Sent! A broker will call you. See it in the Broker Portal.');
     });
   </script>
-  <script src="assets/widget.js?v=15"></script>
+  <script src="assets/widget.js?v=18"></script>
   <script>
     window.addEventListener("chat-messenger-loaded", () => {
       chatSdk.registerContext(chatSdk.prebuilts.ces.createContext({
@@ -269,7 +269,6 @@
     <chat-messenger-chat-bubble chat-title="Auto Import Assistant"></chat-messenger-chat-bubble>
     <chat-messenger-container chat-title="Auto Import Assistant" chat-title-icon="https://gstatic.com/dialogflow-console/common/assets/ccai-favicons/conversational_agents.png" enable-file-upload enable-audio-input>
       <chat-reset-session-button slot="titlebar-actions" title-text="Start new chat"></chat-reset-session-button>
-      <chat-toggle-dialog-button slot="titlebar-actions" title-text-expanded="Collapse" title-text-collapsed="Expand"></chat-toggle-dialog-button>
     </chat-messenger-container>
   </chat-messenger>
 </body>
