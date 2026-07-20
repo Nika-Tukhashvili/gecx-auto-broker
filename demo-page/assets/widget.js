@@ -26,6 +26,27 @@ function bridgeToast(msg) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
+// Mobile: the chat dialog covers the whole page on a phone, and the widget
+// restores its open state across pages/reloads — which left the site unusable
+// when the chat came up already open. Start closed on small screens; the
+// bubble reopens it with one tap and the conversation is preserved.
+// ─────────────────────────────────────────────────────────────────────────
+(function startChatClosedOnMobile() {
+  if (window.innerWidth > 820) return;
+  let tries = 0;
+  const iv = setInterval(() => {
+    // the widget has no close() API — use the titlebar close button we slot in
+    const closeEl = document.querySelector('chat-messenger-close-button');
+    const btn = closeEl && (closeEl.shadowRoot || closeEl).querySelector('button');
+    if (btn) {
+      try { btn.click(); } catch (e) {}
+      clearInterval(iv);
+    }
+    if (++tries > 20) clearInterval(iv);
+  }, 300);
+})();
+
+// ─────────────────────────────────────────────────────────────────────────
 // Session/token guard. The chat SDK stores the session id and its auth token
 // as SEPARATE sessionStorage keys; when the 30-min session expires it clears
 // the session keys but NOT the token, then mints a new session that reuses

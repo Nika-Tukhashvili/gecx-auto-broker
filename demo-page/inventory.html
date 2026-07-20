@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Live Inventory — Universal AI Auto Broker</title>
-  <link rel="stylesheet" href="assets/style.css?v=6">
+  <link rel="stylesheet" href="assets/style.css?v=7">
   <script defer src="https://www.gstatic.com/chat-messenger/sdk/prod/v1.16/chat-messenger.js"></script>
   <link rel="stylesheet" href="https://www.gstatic.com/chat-messenger/sdk/prod/v1.16/themes/chat-messenger-default.css">
   <link rel="stylesheet" href="https://www.gstatic.com/chat-messenger/sdk/prod/v1.16/themes/chat-messenger-layout.css">
@@ -256,7 +256,7 @@
       toast('✅ Sent! A broker will call you. See it in the Broker Portal.');
     });
   </script>
-  <script src="assets/widget.js?v=12"></script>
+  <script src="assets/widget.js?v=13"></script>
   <script>
     window.addEventListener("chat-messenger-loaded", () => {
       chatSdk.registerContext(chatSdk.prebuilts.ces.createContext({
@@ -269,6 +269,7 @@
     <chat-messenger-chat-bubble chat-title="Auto Import Assistant"></chat-messenger-chat-bubble>
     <chat-messenger-container chat-title="Auto Import Assistant" chat-title-icon="https://gstatic.com/dialogflow-console/common/assets/ccai-favicons/conversational_agents.png" enable-file-upload enable-audio-input>
       <chat-reset-session-button slot="titlebar-actions" title-text="Start new chat"></chat-reset-session-button>
+      <chat-messenger-close-button slot="titlebar-actions" title-text="Close chat"></chat-messenger-close-button>
       <chat-toggle-dialog-button slot="titlebar-actions" title-text-expanded="Collapse" title-text-collapsed="Expand"></chat-toggle-dialog-button>
     </chat-messenger-container>
   </chat-messenger>
