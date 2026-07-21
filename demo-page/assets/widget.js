@@ -446,8 +446,11 @@ function bridgeToast(msg) {
       // message that reads like a person's name (phone-bearing messages excluded)
       let name = null;
       for (const m of [...recentUser].reverse()) {
-        const said = m.match(/(?:my name is|name's|i am|i'm|this is)\s+([A-Za-z][A-Za-z '\-]{1,40})/i);
-        if (said) { name = said[1].replace(/[.,!?].*$/, '').trim(); break; }
+        // Lazy word-by-word capture (1-4 words) that stops at punctuation, end of
+        // string, or a connector like "and my phone is" — without a boundary here,
+        // "my name is X and my phone is Y" swallowed "and my phone is" into the name.
+        const said = m.match(/(?:my name is|name's|i am|i'm|this is)\s+([A-Za-z][A-Za-z'\-]*(?:\s+[A-Za-z][A-Za-z'\-]*){0,3}?)(?=[.,!?]|\s+(?:and|my|phone|number|is|calling|reaching)\b|$)/i);
+        if (said) { name = said[1].trim(); break; }
       }
       if (!name) for (const m of [...recentUser].reverse()) {
         if ((m.match(/\d/g) || []).length >= 4) continue;   // phone-ish message, not a name
