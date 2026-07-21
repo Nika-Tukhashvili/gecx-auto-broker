@@ -346,6 +346,18 @@ function bridgeToast(msg) {
     } catch (e) {}
   })();
 
+  // "Start new chat" (chat-reset-session-button) resets the CES conversation
+  // but NOT this page — car/recentUser are plain in-memory state that would
+  // otherwise keep answering from the PREVIOUS conversation. That let a stale
+  // "my name is X" from an earlier chat outrank the real name typed in a
+  // fresh one, since the name-match loop prefers that explicit phrasing.
+  // Clear everything the moment the SDK reports a new session starting.
+  window.addEventListener('chat-messenger-start-new-session', () => {
+    recentUser.length = 0;
+    car.lot = car.image = car.link = car.vehicle = null;
+    try { window.sessionStorage.removeItem(STATE_KEY); } catch (e) {}
+  });
+
   function collectStrings(o, depth, acc) {
     if (depth > 8 || o == null) return acc;
     if (typeof o === 'string') { if (o.trim()) acc.push(o); return acc; }
