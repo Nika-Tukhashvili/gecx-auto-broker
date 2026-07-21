@@ -180,6 +180,18 @@
       localStorage.removeItem(LS_AUTH); showDash(false);
     });
     showDash(localStorage.getItem(LS_AUTH) === '1');
+
+    // Leads are written by the chat widget on OTHER tabs (Home/Inventory/Calculator).
+    // Without this, a portal tab left open never sees them — it only ever rendered
+    // once, at sign-in. 'storage' fires in every OTHER tab when this tab's localStorage
+    // changes (never the tab that wrote it), so also re-render on refocus to cover
+    // "I created a lead in this same tab, then switched back."
+    window.addEventListener('storage', (e) => {
+      if (e.key === LS_LEADS && document.getElementById('dash').style.display !== 'none') render();
+    });
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && document.getElementById('dash').style.display !== 'none') render();
+    });
   </script>
 </body>
 </html>
