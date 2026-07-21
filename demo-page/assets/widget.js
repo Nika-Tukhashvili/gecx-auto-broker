@@ -443,11 +443,27 @@ function bridgeToast(msg) {
       const confIds = [...text.matchAll(/\b(\d-\d{6,9})\b/g)].map(m => m[1]);
       if (confIds.length) car.lot = confIds[confIds.length - 1];
       const confVeh = (text.match(/for (?:the|your)\s+((?:19|20)\d{2}\s+[A-Za-z][\w .\-]+?)[.\n,]/) || [])[1];
-      // phone: first clean phone-like digit run across recent user messages
+      // phone: first clean phone-like digit run across recent user messages.
+      // Voice turns arrive as SPOKEN WORDS ("five five five one one two two
+      // one one"), not digit characters, so the plain digit regex never
+      // matches them — fall back to reading consecutive digit-words as a
+      // phone number when no literal digits are found.
+      const NUM_WORDS = { zero: '0', oh: '0', one: '1', two: '2', three: '3', four: '4', five: '5', six: '6', seven: '7', eight: '8', nine: '9' };
+      function spokenDigits(str) {
+        const tokens = str.toLowerCase().split(/[^a-z]+/).filter(Boolean);
+        let best = '', cur = '';
+        for (const t of tokens) {
+          if (NUM_WORDS[t] !== undefined) { cur += NUM_WORDS[t]; if (cur.length > best.length) best = cur; }
+          else cur = '';
+        }
+        return best.length >= 7 ? best : null;
+      }
       let phone = null;
       for (const m of [...recentUser].reverse()) {
         const hit = m.match(/\+?\d[\d\s().\-]{5,}\d/);
         if (hit && hit[0].replace(/\D/g, '').length >= 7) { phone = hit[0].trim(); break; }
+        const spoken = spokenDigits(m);
+        if (spoken) { phone = spoken; break; }
       }
       // Duplicate guard: refs derive from the phone's tail, so two DIFFERENT people
       // (or test numbers) can share a ref — "same ref" alone must not drop a lead.
